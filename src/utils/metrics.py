@@ -85,6 +85,7 @@ def compute_classification_metrics(
 def get_confusion_matrix(
     y_true: np.ndarray,
     y_pred: np.ndarray,
+    labels: Optional[List[int]] = None,
 ) -> np.ndarray:
     """
     Compute the confusion matrix.
@@ -92,11 +93,12 @@ def get_confusion_matrix(
     Args:
         y_true: Ground-truth labels.
         y_pred: Predicted labels.
+        labels: Optional explicit list of class indices.
 
     Returns:
         2-D integer array of shape ``(C, C)``.
     """
-    return confusion_matrix(y_true, y_pred)
+    return confusion_matrix(y_true, y_pred, labels=labels)
 
 
 def get_classification_report(
@@ -115,9 +117,12 @@ def get_classification_report(
     Returns:
         Multi-line string containing precision/recall/F1 per class.
     """
+    labels = list(range(len(class_labels))) if class_labels is not None else None
     return classification_report(
         y_true,
         y_pred,
+        labels=labels,
         target_names=class_labels,
         zero_division=0,
     )
+

@@ -125,8 +125,9 @@ class ModelEvaluator:
             class_labels=self.class_labels,
         )
 
+        labels = list(range(len(self.class_labels))) if self.class_labels is not None else None
         report = get_classification_report(y_true, y_pred, self.class_labels)
-        cm     = get_confusion_matrix(y_true, y_pred)
+        cm     = get_confusion_matrix(y_true, y_pred, labels=labels)
 
         # --- Log results ---
         logger.info("=== Evaluation Metrics (%s) ===", split_name)

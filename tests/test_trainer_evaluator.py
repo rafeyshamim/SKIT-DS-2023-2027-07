@@ -67,5 +67,6 @@ class TestEvaluator:
 
         metrics = evaluator.evaluate(ds, split_name="test")
         assert "accuracy" in metrics
-        assert "f1_macro" in metrics
+        assert "f1_score" in metrics
         assert os.path.exists(os.path.join(cfg["paths"]["results_dir"], "classification_report_test.txt"))
+

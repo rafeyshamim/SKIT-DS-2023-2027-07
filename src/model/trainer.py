@@ -134,14 +134,23 @@ def build_callbacks(config: Dict[str, Any]) -> list:
         )
 
     # 4 — TensorBoard
-    tb_log_dir = os.path.join(logs_dir, "tensorboard")
-    callbacks.append(
-        keras.callbacks.TensorBoard(
-            log_dir=tb_log_dir,
-            histogram_freq=1,
-            write_graph=True,
-        )
-    )
+    tb_cfg = train_cfg.get("tensorboard", {})
+    if tb_cfg.get("enabled", True):
+        try:
+            import tensorboard  # verify availability
+            tb_log_dir = os.path.join(logs_dir, "tensorboard")
+            callbacks.append(
+                keras.callbacks.TensorBoard(
+                    log_dir=tb_log_dir,
+                    histogram_freq=1,
+                    write_graph=True,
+                )
+            )
+        except (ImportError, Exception) as exc:
+            logger.warning(
+                "TensorBoard callback could not be initialized (%s). Skipping.", exc
+            )
+
 
     # 5 — CSV Logger
     csv_path = os.path.join(logs_dir, "training_history.csv")

@@ -14,12 +14,13 @@ class TestArchitecture:
     def test_conv3d_block_with_pool(self):
         inputs = tf.keras.Input(shape=(32, 32, 32, 1))
         x = conv3d_block(inputs, filters=8, pool=True, name_prefix="test1")
-        assert x.shape.as_list() == [None, 16, 16, 16, 8]
+        assert tuple(x.shape) == (None, 16, 16, 16, 8)
 
     def test_conv3d_block_without_pool(self):
         inputs = tf.keras.Input(shape=(16, 16, 16, 8))
         x = conv3d_block(inputs, filters=16, pool=False, name_prefix="test2")
-        assert x.shape.as_list() == [None, 16, 16, 16, 16]
+        assert tuple(x.shape) == (None, 16, 16, 16, 16)
+
 
     def test_build_3d_cnn(self):
         model = build_3d_cnn(

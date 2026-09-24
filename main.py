@@ -187,7 +187,8 @@ def cmd_demo(args):
         if v:
             print(f"        - {k}: {v}")
 
-    print("\n✅ End-to-End Demo Complete! All Sprint 1, 2, and 3 capabilities verified.")
+    print("\n[SUCCESS] End-to-End Demo Complete! All Sprint 1, 2, and 3 capabilities verified.")
+
 
 
 def main():

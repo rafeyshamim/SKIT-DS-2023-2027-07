@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DS-07 — Frontend Requirements &amp; Wireframes</title>
+<style>
+  :root{
+    --ink:#1c2430; --ink-soft:#4b5666; --line:#c7ccd4;
+    --paper:#f6f5f2; --card:#ffffff; --accent:#2f5d62; --accent-soft:#e4ece9;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e8e6e1; --ink-soft:#a9b0ba; --line:#3a4048;
+      --paper:#181c20; --card:#20252b; --accent:#7fb2a8; --accent-soft:#243330;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e8e6e1; --ink-soft:#a9b0ba; --line:#3a4048;
+    --paper:#181c20; --card:#20252b; --accent:#7fb2a8; --accent-soft:#243330;
+  }
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Courier New', ui-monospace, SFMono-Regular, Menlo, monospace;
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  header{
+    padding:2rem 1.5rem 1.2rem; border-bottom:1px solid var(--line); background:var(--paper);
+  }
+  header .eyebrow{ color:var(--ink-soft); font-size:.8rem; }
+  header h1{ margin:.3rem 0 .2rem; font-size:1.5rem; letter-spacing:-.01em; }
+  header p{ margin:0; color:var(--ink-soft); font-size:.9rem; max-width:60ch; }
+
+  .req{ max-width:900px; margin:1.5rem auto 0; padding:0 1.5rem; }
+  .req h2{ font-size:1rem; border-bottom:1px solid var(--line); padding-bottom:.4rem; }
+  .req ul{ margin:.6rem 0 1.6rem; padding-left:1.2rem; font-size:.92rem; color:var(--ink); }
+  .req li{ margin:.35rem 0; }
+  .req li b{ color:var(--accent); }
+
+  nav{
+    max-width:900px; margin:1.6rem auto 0; padding:0 1.5rem;
+    display:flex; gap:.5rem; flex-wrap:wrap;
+  }
+  nav button{
+    font-family:inherit; font-size:.85rem; padding:.5rem .9rem; cursor:pointer;
+    border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:2px;
+  }
+  nav button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  .canvas{ max-width:900px; margin:1rem auto 3rem; padding:0 1.5rem; }
+  .screen{ display:none; }
+  .screen.active{ display:block; }
+
+  .frame{
+    border:1px solid var(--ink); background:var(--card);
+    border-radius:3px; overflow:hidden;
+  }
+  .frame .titlebar{
+    border-bottom:1px solid var(--ink); padding:.4rem .7rem;
+    font-size:.75rem; color:var(--ink-soft); display:flex; justify-content:space-between;
+  }
+  .frame .body{ padding:1rem; }
+
+  .box{ border:1.5px dashed var(--line); border-radius:2px; padding:.7rem; margin-bottom:.7rem; }
+  .box .label{ font-size:.7rem; color:var(--ink-soft); margin-bottom:.35rem; }
+  .btn{
+    display:inline-block; border:1.5px solid var(--ink); padding:.4rem .8rem;
+    border-radius:2px; font-size:.8rem; background:var(--accent-soft);
+  }
+  .row{ display:flex; gap:.7rem; flex-wrap:wrap; }
+  .row > .box{ flex:1; min-width:140px; }
+  .x-box{
+    aspect-ratio:4/3; border:1.5px dashed var(--line); border-radius:2px;
+    display:flex; align-items:center; justify-content:center; color:var(--ink-soft);
+    font-size:.75rem; position:relative; background:
+      repeating-linear-gradient(45deg, transparent, transparent 10px, var(--line) 10px, var(--line) 11px);
+    background-color: var(--card);
+  }
+  .note{ font-size:.72rem; color:var(--accent); margin-top:.5rem; }
+  .stat{ display:flex; align-items:center; justify-content:space-between; }
+  .stat .val{ font-weight:bold; }
+  .pill{ border:1px solid var(--ink); border-radius:20px; padding:.15rem .6rem; font-size:.7rem; }
+
+  footer{ text-align:center; color:var(--ink-soft); font-size:.75rem; padding:1rem 0 2rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">SKIT/DS/2023-2027 · DS-07 · Naman Verma · Sprint 1: UI &amp; Frontend Requirement</div>
+  <h1>AI-Powered 3D Medical Image Reconstruction &amp; Disease Analysis</h1>
+  <p>Frontend requirements and low-fidelity wireframes for the Streamlit application — covering the upload flow, 3D reconstruction viewer, and the AI prediction/report screen. This is the reference the rest of the frontend sprint (visualization component, results UI, report generation) will be built against.</p>
+</header>
+
+<div class="req">
+  <h2>Frontend requirements</h2>
+  <ul>
+    <li><b>Framework:</b> Streamlit (Python), talking to the FastAPI backend over REST.</li>
+    <li><b>Screen 1 — Upload:</b> accept a CT scan (DICOM/NIfTI series), show file/series info, trigger preprocessing + reconstruction.</li>
+    <li><b>Screen 2 — 3D Viewer:</b> render the reconstructed 3D organ model, with basic rotate/zoom and a slice scrubber for the source CT.</li>
+    <li><b>Screen 3 — Results:</b> show the AI disease prediction, a confidence score, and a "Download PDF report" action.</li>
+    <li><b>State:</b> a simple linear flow (Upload → Processing → Viewer → Results); no login/auth needed for MVP.</li>
+    <li><b>Non-functional:</b> clear loading/progress states during model inference (this can take time); plain-language error states if a scan fails to load.</li>
+  </ul>
+</div>
+
+<nav>
+  <button class="active" data-target="s1">1 · Upload</button>
+  <button data-target="s2">2 · 3D Viewer</button>
+  <button data-target="s3">3 · Results &amp; Report</button>
+</nav>
+
+<div class="canvas">
+
+  <!-- SCREEN 1 -->
+  <div class="screen active" id="s1">
+    <div class="frame">
+      <div class="titlebar"><span>wireframe — screen 1</span><span>upload.py</span></div>
+      <div class="body">
+        <div class="box"><div class="label">page title</div>CT Scan Upload — 3D Reconstruction &amp; Disease Analysis</div>
+        <div class="x-box" style="aspect-ratio:16/5;">Drag &amp; drop CT series (.dcm / .nii) — or Browse files</div>
+        <div class="row" style="margin-top:.7rem;">
+          <div class="box"><div class="label">series info (after upload)</div>Patient/Scan ID · Slice count · Modality</div>
+          <div class="box"><div class="label">action</div><span class="btn">Run Reconstruction →</span></div>
+        </div>
+        <div class="note">Requirement: show upload progress %, then a "preprocessing…" spinner before routing to Screen 2.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2 -->
+  <div class="screen" id="s2">
+    <div class="frame">
+      <div class="titlebar"><span>wireframe — screen 2</span><span>viewer.py</span></div>
+      <div class="body">
+        <div class="row">
+          <div class="x-box" style="flex:2;">3D reconstructed organ model<br>(rotate / zoom)</div>
+          <div class="x-box" style="flex:1;">2D CT slice preview</div>
+        </div>
+        <div class="box" style="margin-top:.7rem;"><div class="label">slice scrubber</div>◀ ▬▬▬▬●▬▬▬▬▬▬▬▬ ▶  &nbsp; slice 128 / 240</div>
+        <div class="row">
+          <div class="box"><span class="btn">↺ Reset view</span></div>
+          <div class="box"><span class="btn">Continue to Results →</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 3 -->
+  <div class="screen" id="s3">
+    <div class="frame">
+      <div class="titlebar"><span>wireframe — screen 3</span><span>results.py</span></div>
+      <div class="body">
+        <div class="box">
+          <div class="label">AI prediction</div>
+          <div class="stat"><span>Predicted finding</span><span class="pill">e.g. Nodule detected</span></div>
+        </div>
+        <div class="box">
+          <div class="label">confidence score</div>
+          <div class="stat"><span>Model confidence</span><span class="val">87%</span></div>
+        </div>
+        <div class="row">
+          <div class="x-box" style="flex:1;">annotated 3D region (highlight)</div>
+          <div class="box" style="flex:1;">
+            <div class="label">report</div>
+            <span class="btn">⬇ Download PDF Report</span>
+            <div class="note">Requirement: PDF includes patient/scan meta, prediction, confidence, and the reconstructed view snapshot.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Low-fidelity wireframe — for team review before Streamlit build-out.</footer>
+
+<script>
+  document.querySelectorAll('nav button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

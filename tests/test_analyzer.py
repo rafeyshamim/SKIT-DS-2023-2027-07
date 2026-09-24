@@ -51,6 +51,6 @@ class TestDiseaseAnalyzer:
         model = get_model_from_config(dummy_config)
         analyzer = DiseaseAnalyzer(model, dummy_config)
 
-        # Invalid 2D shape
-        with pytest.raises(ValueError, match="Expected volume of shape"):
+        with pytest.raises(ValueError, match="Expected volume shape"):
             analyzer.analyze(np.ones((32, 32), dtype=np.float32))
+
