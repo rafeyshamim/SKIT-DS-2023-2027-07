@@ -163,7 +163,10 @@ AI-3D-Image-Reconstruction/
 ├── docs/
 │   ├── sprint1_input_data_specification.md
 │   ├── sprint2_architecture_specification.md
-│   └── sprint3_training_evaluation_specification.md
+│   ├── sprint3_training_evaluation_specification.md
+│   ├── sprint4_model_optimization_packaging_specification.md
+│   ├── sprint5_final_model_validation_specification.md
+│   └── sprint6_integration_testing_specification.md
 │
 ├── models/
 │   ├── checkpoints/         # Model weights & best checkpoint saves
@@ -175,9 +178,11 @@ AI-3D-Image-Reconstruction/
 │
 ├── src/
 │   ├── disease_analysis/    # Prediction, probability distribution, confidence scoring
+│   ├── inference/           # Model packaging, TFLite export, standalone InferenceEngine
 │   ├── model/               # 3D CNN architecture, ModelTrainer, ModelEvaluator
 │   ├── preprocessing/       # Volume loader, resizer, normalizer, pipeline
 │   ├── reconstruction/      # Slicing, MIP projections, 3D marching cubes meshes
+│   ├── validation/          # ModelValidator suite for test cases
 │   └── utils/               # Config loader, logger factory, metric calculations
 │
 ├── tests/                   # Pytest test suite (fixtures, preprocessing, model, trainer)
@@ -254,7 +259,22 @@ python main.py predict --input path/to/scan.nii.gz --config config/config.yaml
 python main.py reconstruct --input path/to/scan.nii.gz --output-dir results/reconstruction/
 ```
 
-### 6. Run End-to-End Demonstration
+### 6. Package Model for Deployment (Sprint 4)
+```bash
+python main.py package --export-name 3d_cnn_packaged --export-tflite --quantize
+```
+
+### 7. Run Final Model Validation (Sprint 5)
+```bash
+python main.py validate --num-test-cases 5 --threshold 0.50
+```
+
+### 8. Run End-to-End Integration Test (Sprint 6)
+```bash
+python main.py integration-test
+```
+
+### 9. Run End-to-End Demonstration
 ```bash
 python main.py demo
 ```
