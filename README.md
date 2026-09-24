@@ -134,56 +134,59 @@ The major objectives of this project are:
 
 ## 🛠️ Technologies
 
-The technologies used in the project will be documented here as development progresses.
+### Technology Stack
 
-### Current Technology Stack
-
-- **Programming Language:** `TODO`
-- **AI / ML Framework:** `TODO`
-- **Computer Vision:** `TODO`
-- **3D Reconstruction:** `TODO`
-- **Frontend / UI:** `TODO`
-- **Backend:** `TODO`
-- **Database:** `TODO`
-- **Development Environment:** `TODO`
+- **Programming Language:** Python 3.10+
+- **AI / ML Framework:** TensorFlow 2.13+ / Keras
+- **Medical Imaging:** NiBabel (NIfTI), MedMNIST3D (OrganMNIST3D, etc.)
+- **Computer Vision & Scientific Computing:** NumPy, SciPy (`scipy.ndimage`), scikit-image (Marching Cubes)
+- **3D Reconstruction & Visualization:** Plotly (interactive 3D WebGL isosurfaces), Matplotlib, Seaborn
+- **Metrics & Evaluation:** scikit-learn (Accuracy, Precision, Recall, F1, ROC-AUC)
+- **Configuration & Utilities:** PyYAML, TQDM, Python standard logging
+- **Testing:** Pytest, Pytest-cov
 
 ---
 
 ## 📂 Project Structure
 
-The repository structure will follow a modular architecture similar to:
-
 ```text
 AI-3D-Image-Reconstruction/
 │
+├── config/
+│   └── config.yaml          # Unified parameters (model, preprocessing, training, paths)
+│
 ├── data/
-│   ├── raw/
-│   ├── processed/
+│   ├── raw/                 # Raw datasets (NIfTI scans, MedMNIST downloads)
+│   ├── processed/           # Preprocessed cached volumes
 │   └── README.md
+│
+├── docs/
+│   ├── sprint1_input_data_specification.md
+│   ├── sprint2_architecture_specification.md
+│   └── sprint3_training_evaluation_specification.md
 │
 ├── models/
+│   ├── checkpoints/         # Model weights & best checkpoint saves
 │   └── README.md
 │
+├── results/
+│   ├── plots/               # Confusion matrix, ROC curves, training curves
+│   └── reconstruction/      # MIP, orthogonal slice PNGs, 3D HTML isosurfaces
+│
 ├── src/
-│   ├── preprocessing/
-│   ├── reconstruction/
-│   ├── disease_analysis/
-│   └── visualization/
+│   ├── disease_analysis/    # Prediction, probability distribution, confidence scoring
+│   ├── model/               # 3D CNN architecture, ModelTrainer, ModelEvaluator
+│   ├── preprocessing/       # Volume loader, resizer, normalizer, pipeline
+│   ├── reconstruction/      # Slicing, MIP projections, 3D marching cubes meshes
+│   └── utils/               # Config loader, logger factory, metric calculations
 │
-├── frontend/
+├── tests/                   # Pytest test suite (fixtures, preprocessing, model, trainer)
 │
-├── backend/
-│
-├── notebooks/
-│
-├── tests/
-│
-├── requirements.txt
-├── README.md
-└── LICENSE
+├── main.py                  # Unified command-line interface (CLI)
+├── requirements.txt         # Project dependencies
+├── setup.py                 # Package setup and build specification
+└── README.md
 ```
-
-> The structure will be updated according to the final implementation.
 
 ---
 
@@ -193,7 +196,7 @@ AI-3D-Image-Reconstruction/
 
 ```bash
 git clone <REPOSITORY_URL>
-cd <REPOSITORY_FOLDER>
+cd "Final Project"
 ```
 
 ### 2. Create a Virtual Environment
@@ -205,13 +208,11 @@ python -m venv venv
 ### 3. Activate the Environment
 
 #### Windows
-
 ```bash
 venv\Scripts\activate
 ```
 
 #### Linux / macOS
-
 ```bash
 source venv/bin/activate
 ```
@@ -222,28 +223,46 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> Update the installation instructions once the final dependency list is available.
-
 ---
 
 ## 🚀 Usage
 
-After completing the installation:
+The project provides a unified CLI via `main.py`:
 
+### 1. Run Preprocessing (Sprint 1)
 ```bash
-<START_COMMAND>
+python main.py preprocess --config config/config.yaml
 ```
 
-Then open the application using the URL or interface specified by the project implementation.
+### 2. Train 3D CNN Model (Sprints 2 & 3)
+```bash
+python main.py train --config config/config.yaml
+```
 
-### General Workflow
+### 3. Evaluate Model on Test Split (Sprint 3)
+```bash
+python main.py evaluate --config config/config.yaml
+```
 
-1. Upload or provide the required medical imaging data.
-2. Preprocess the input data.
-3. Run the AI-based reconstruction pipeline.
-4. Generate the 3D representation.
-5. Perform disease analysis.
-6. Visualize the reconstructed output and analysis results.
+### 4. Disease Analysis & Confidence Scoring
+```bash
+python main.py predict --input path/to/scan.nii.gz --config config/config.yaml
+```
+
+### 5. 3D Visual Reconstruction & Projections
+```bash
+python main.py reconstruct --input path/to/scan.nii.gz --output-dir results/reconstruction/
+```
+
+### 6. Run End-to-End Demonstration
+```bash
+python main.py demo
+```
+
+### 7. Run Test Suite
+```bash
+pytest
+```
 
 ---
 

@@ -1,0 +1,36 @@
+# ==============================================================================
+# AI-Powered 3D Medical Image Reconstruction and Disease Analysis
+# Project ID: SKIT/DS/2023-2027/CSE-F-07
+# ==============================================================================
+
+# Core AI / ML Framework
+tensorflow>=2.13.0
+
+# Numerical Computing
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Medical Imaging
+nibabel>=5.1.0           # NIfTI file loading
+medmnist>=2.2.3          # MedMNIST3D benchmark datasets
+
+# Computer Vision / Image Processing
+scikit-image>=0.21.0     # Marching cubes, image utilities
+Pillow>=10.0.0           # Image loading
+
+# Machine Learning Utilities
+scikit-learn>=1.3.0      # Metrics: accuracy, precision, recall, F1, AUC-ROC
+
+# Visualization
+matplotlib>=3.7.0        # 2D plotting, training curves, confusion matrix
+seaborn>=0.12.0          # Heatmaps
+plotly>=5.15.0           # Interactive 3D visualization
+
+# Data / Configuration
+PyYAML>=6.0.1            # YAML config file loading
+pandas>=2.0.0            # Results tables and CSV handling
+tqdm>=4.65.0             # Progress bars
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0        # Code coverage reporting
