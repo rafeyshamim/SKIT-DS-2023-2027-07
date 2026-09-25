@@ -26,6 +26,9 @@ matplotlib>=3.7.0        # 2D plotting, training curves, confusion matrix
 seaborn>=0.12.0          # Heatmaps
 plotly>=5.15.0           # Interactive 3D visualization
 
+# Inference & Logging
+tensorboard>=2.13.0
+
 # Data / Configuration
 PyYAML>=6.0.1            # YAML config file loading
 pandas>=2.0.0            # Results tables and CSV handling

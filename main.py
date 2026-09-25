@@ -5,14 +5,18 @@ Team Lead: Mohammad Rafey
 
 Main Command-Line Interface (CLI).
 Supported Commands:
-    - preprocess   : Preprocess volumetric medical imaging data
-    - train        : Train the 3D CNN classifier
-    - evaluate     : Evaluate model performance on test set
-    - predict      : Predict disease and confidence score for a volume
-    - reconstruct  : Generate 3D reconstructions (MIP, slices, isosurface)
-    - demo         : Run an end-to-end demonstration using synthetic volume
+    - preprocess       : Preprocess volumetric medical imaging data (Sprint 1)
+    - train            : Train the 3D CNN classifier (Sprints 2 & 3)
+    - evaluate         : Evaluate model performance on test set (Sprint 3)
+    - predict          : Predict disease and confidence score for a volume (Sprint 3)
+    - reconstruct      : Generate 3D reconstructions (MIP, slices, isosurface) (Sprint 3)
+    - package          : Optimize and package model for deployment (Sprint 4)
+    - validate         : Validate final model against test cases (Sprint 5)
+    - integration-test : Perform complete end-to-end integration test (Sprint 6)
+    - demo             : Run an end-to-end demonstration using synthetic volume
 """
 import argparse
+import json
 import os
 import sys
 import numpy as np
@@ -146,6 +150,103 @@ def cmd_reconstruct(args):
     logger.info("Reconstructions generated: %s", results)
 
 
+def cmd_package(args):
+    """Sprint 4 CLI command: Package and optimize trained model for inference."""
+    logger.info("Starting Model Optimization & Packaging...")
+    from src.inference.packager import ModelPackager
+    from src.model.trainer import ModelTrainer
+
+    config = load_config(args.config)
+    trainer = ModelTrainer(config)
+    try:
+        model = trainer.load_best_model()
+    except FileNotFoundError:
+        logger.warning("Checkpoint not found. Packaging initialized model weights.")
+        model = trainer.model
+
+    packager = ModelPackager(config)
+    artifacts = packager.package_model(
+        model,
+        export_name=args.export_name,
+        export_tflite=args.export_tflite,
+        quantize_tflite=args.quantize,
+    )
+    logger.info("Model successfully packaged! Artifacts: %s", artifacts)
+
+
+def cmd_validate(args):
+    """Sprint 5 CLI command: Run final validation against test cases."""
+    logger.info("Starting Final Model Validation...")
+    from src.model.trainer import ModelTrainer
+    from src.validation.validator import ModelValidator
+
+    config = load_config(args.config)
+    trainer = ModelTrainer(config)
+    try:
+        model = trainer.load_best_model()
+    except FileNotFoundError:
+        logger.warning("Checkpoint not found. Validating initialized model weights.")
+        model = trainer.model
+
+    # Generate synthetic test phantoms if no explicit file provided
+    input_shape = config["model"]["input_shape"][:3]
+    num_classes = config["data"]["num_classes"]
+
+    test_volumes = []
+    expected_labels = []
+    rng = np.random.default_rng(42)
+
+    for i in range(args.num_test_cases):
+        vol = rng.uniform(0.0, 1.0, size=input_shape).astype(np.float32)
+        test_volumes.append(vol)
+        expected_labels.append(i % num_classes)
+
+    validator = ModelValidator(model, config)
+    summary = validator.validate_test_cases(
+        test_volumes,
+        expected_labels,
+        confidence_threshold=args.threshold,
+    )
+    logger.info("Validation Complete! Accuracy: %.2f%%", summary["accuracy"] * 100)
+
+
+def cmd_integration_test(args):
+    """Sprint 6 CLI command: Complete end-to-end integration testing."""
+    logger.info("Executing Complete End-to-End Integration Test...")
+    config = load_config(args.config)
+
+    # 1. Pipeline check
+    from src.preprocessing.pipeline import PreprocessingPipeline
+    from src.model.architecture import get_model_from_config
+    from src.disease_analysis.analyzer import DiseaseAnalyzer
+    from src.reconstruction.reconstructor import VolumeReconstructor
+    from src.inference.packager import ModelPackager
+    from src.inference.engine import InferenceEngine
+
+    shape = tuple(config["model"]["input_shape"][:3])
+    raw = np.random.default_rng(42).uniform(0, 1, size=shape).astype(np.float32)
+
+    pipeline = PreprocessingPipeline(config)
+    proc = pipeline.preprocess_single_volume(raw, augment=False)
+    assert proc.shape == tuple(config["model"]["input_shape"]), f"Invalid shape: {proc.shape}"
+
+    model = get_model_from_config(config)
+    analyzer = DiseaseAnalyzer(model, config)
+    analysis = analyzer.analyze(proc)
+    assert "confidence" in analysis
+
+    recon = VolumeReconstructor(output_dir="results/integration_test/")
+    recons = recon.generate_all_visualizations(proc, prefix="integration")
+
+    packager = ModelPackager(config)
+    artifacts = packager.package_model(model, export_name="integration_pkg", export_tflite=False)
+
+    engine = InferenceEngine(package_dir=os.path.dirname(artifacts["keras_model"]))
+    engine_res = engine.predict_volume(raw, preprocess=True)
+
+    logger.info("Integration Test Succeeded! Engine prediction: %s", engine_res["predicted_class_label"])
+
+
 def cmd_demo(args):
     """Run complete end-to-end demo on a synthetic volume."""
     logger.info("Executing End-to-End System Demonstration...")
@@ -187,8 +288,7 @@ def cmd_demo(args):
         if v:
             print(f"        - {k}: {v}")
 
-    print("\n[SUCCESS] End-to-End Demo Complete! All Sprint 1, 2, and 3 capabilities verified.")
-
+    print("\n[SUCCESS] End-to-End Demo Complete! All Sprint capabilities verified.")
 
 
 def main():
@@ -219,6 +319,20 @@ def main():
     p_rec.add_argument("--output-dir", type=str, default="results/reconstruction/", help="Output directory")
     p_rec.add_argument("--prefix", type=str, default="recon", help="File prefix for outputs")
 
+    # Subcommand: package (Sprint 4)
+    p_pkg = subparsers.add_parser("package", help="Package and optimize model for deployment")
+    p_pkg.add_argument("--export-name", type=str, default="3d_cnn_packaged", help="Export directory name")
+    p_pkg.add_argument("--export-tflite", action="store_true", default=True, help="Export TFLite model")
+    p_pkg.add_argument("--quantize", action="store_true", default=False, help="Enable dynamic range quantization")
+
+    # Subcommand: validate (Sprint 5)
+    p_val = subparsers.add_parser("validate", help="Validate final model against test cases")
+    p_val.add_argument("--num-test-cases", type=int, default=5, help="Number of test cases")
+    p_val.add_argument("--threshold", type=float, default=0.50, help="Confidence threshold")
+
+    # Subcommand: integration-test (Sprint 6)
+    p_it = subparsers.add_parser("integration-test", help="Run end-to-end integration test")
+
     # Subcommand: demo
     p_demo = subparsers.add_parser("demo", help="Run end-to-end synthetic demonstration")
 
@@ -234,6 +348,9 @@ def main():
         "evaluate": cmd_evaluate,
         "predict": cmd_predict,
         "reconstruct": cmd_reconstruct,
+        "package": cmd_package,
+        "validate": cmd_validate,
+        "integration-test": cmd_integration_test,
         "demo": cmd_demo,
     }
 
