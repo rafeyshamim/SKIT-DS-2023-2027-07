@@ -11,7 +11,7 @@ An AI-powered system focused on **3D image reconstruction and disease analysis**
 | Name | Role |
 |---|---|
 | **Naman Verma** | Team Member |
-| **Mohd Rafey** | Team Member |
+| **Mohd Rafey** | Team Lead  |
 | **Mayuri Agarwal** | Team Member |
 | **Mohit Chaudhary** | Team Member |
 
