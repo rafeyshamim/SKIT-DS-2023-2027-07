@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# Medical / generated data
+backend/data/uploads/
+backend/data/processed/
+backend/data/mongo_store/
+backend/medvision.db
+
+# Logs
+*.log
