@@ -1,0 +1,35 @@
+{
+  "organ_name": "Spine_Bone",
+  "pipeline_config": {
+    "target_spacing": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "hu_window": "bone",
+    "normalize_method": "min_max",
+    "denoise_method": "curvature_flow",
+    "isovalue": 0.5,
+    "smooth_mesh": true,
+    "decimate_reduction": 0.2,
+    "export_formats": [
+      "stl",
+      "obj"
+    ],
+    "keep_largest_component": true
+  },
+  "output_directory": "C:\\Users\\Mohit Choudhary\\OneDrive\\Documents\\data preproceess\\pipeline_output\\bone_reconstruction",
+  "preprocessed_nifti": "C:\\Users\\Mohit Choudhary\\OneDrive\\Documents\\data preproceess\\pipeline_output\\bone_reconstruction\\Spine_Bone_preprocessed.nii.gz",
+  "exported_models": [
+    "C:\\Users\\Mohit Choudhary\\OneDrive\\Documents\\data preproceess\\pipeline_output\\bone_reconstruction\\spine_bone.stl",
+    "C:\\Users\\Mohit Choudhary\\OneDrive\\Documents\\data preproceess\\pipeline_output\\bone_reconstruction\\spine_bone.obj"
+  ],
+  "mesh_statistics": {
+    "vertex_count": 10713,
+    "face_count": 21360,
+    "surface_area_mm2": 8574.792765507646,
+    "volume_mm3": 35366.94772495545,
+    "is_watertight": false
+  },
+  "evaluation": null
+}
