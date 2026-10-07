@@ -1,156 +1,393 @@
-# MedVision 3D CT Diagnostic Backend
+# AI-Powered 3D Image Reconstruction and Disease Analysis
 
-Enterprise-grade medical AI backend for Computed Tomography (CT) scan upload, 3D volumetric reconstruction, deep learning inference with 3D CNNs, and automated clinical diagnostic report generation.
+> **Final Year Project**
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://postgresql.org)
-[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-47A248?logo=mongodb&logoColor=white)](https://mongodb.com)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
-[![Tests](https://img.shields.io/badge/Tests-Passing-success)](https://pytest.org)
+An AI-powered system focused on **3D image reconstruction and disease analysis** using Artificial Intelligence, Machine Learning, and Computer Vision techniques. The project aims to transform medical imaging data into meaningful 3D representations and assist with AI-based analysis for identifying potential disease-related patterns.
 
 ---
 
-## 1. System Architecture & Highlights
+## 👥 Team Members
 
-- **FastAPI Core**: Async REST API with high-throughput streaming, Pydantic v2 data models, and live interactive Swagger UI (`/docs`).
-- **Hybrid Dual-Database Architecture**:
-  - **PostgreSQL**: ACID relational transactions for `patients`, `ct_scans`, `inference_runs`, and `reports`.
-  - **MongoDB**: Schema-flexible NoSQL store for high-dimensional DICOM header tags, 3D lesion bounding boxes, and per-slice abnormality heatmaps.
-- **3D CT Reconstruction Pipeline**:
-  - Automatic DICOM / ZIP / NIfTI archive parsing.
-  - Conversion from raw attenuation to calibrated **Hounsfield Units (HU)**.
-  - Clinical **Lung Windowing** (Window Center: -600 HU, Window Width: 1500 HU).
-  - Trilinear isotropic volume resampling to standardized tensor dimensions `(1, 1, 32, 64, 64)`.
-- **Packaged 3D CNN Inference Service (`MedNet-3D`)**:
-  - Full 3D convolutional receptive fields capturing volumetric continuity across axial slices.
-  - Multi-class classification: *Normal*, *Benign Nodule*, *Malignant Suspicion*.
-  - 3D Grad-CAM blob localization extracting 3D bounding boxes $[z, y, x]$, centroid coordinates, and lesion volume ($\text{mm}^3$).
-- **Automated Clinical Reporting**:
-  - Generates diagnostic reports with findings, impression, and follow-up guidance aligned with **Fleischner Society Guidelines**.
-- **Containerized Deployment**:
-  - Multi-stage Dockerfile running as non-root user (`medvision`) for healthcare security compliance.
-  - Complete `docker-compose.yml` orchestrating API, PostgreSQL 16, MongoDB 7.0, Redis 7, and Adminer.
+| Name | Role |
+|---|---|
+| **Naman Verma** | Team Member |
+| **Mohd Rafey** | Team Lead  |
+| **Mayuri Agarwal** | Team Member |
+| **Mohit Chaudhary** | Team Member |
 
 ---
 
-## 2. Project Directory Structure
+## 📌 Project Overview
 
+Medical imaging plays an important role in the detection, analysis, and monitoring of diseases. However, conventional 2D medical images can sometimes make it difficult to understand the complete three-dimensional structure of anatomical regions.
+
+Our project, **AI-Powered 3D Image Reconstruction and Disease Analysis**, explores the use of AI and computer vision to reconstruct 3D representations from medical imaging data and perform intelligent analysis on the reconstructed information.
+
+The system is designed as an academic and research-oriented project to demonstrate how modern AI techniques can be applied to medical image processing and analysis.
+
+---
+
+## 🎯 Objectives
+
+The major objectives of this project are:
+
+- Develop an AI-based pipeline for **3D image reconstruction**.
+- Process and analyze medical imaging data using computer vision techniques.
+- Extract meaningful information from medical images.
+- Explore AI-assisted **disease analysis**.
+- Provide an intuitive interface for visualizing reconstructed 3D data.
+- Demonstrate the potential of AI in medical image analysis.
+- Build a modular system that can be extended for future research.
+
+---
+
+## ✨ Key Features
+
+- 🧠 **AI-Based Image Analysis**
+- 🧊 **3D Image Reconstruction**
+- 🔬 **Disease Analysis**
+- 🖼️ **Medical Image Processing**
+- 📊 **AI-Assisted Results**
+- 📈 **Visualization of Analysis**
+- 💻 **User-Friendly Interface**
+- 🔄 **Modular and Extensible Architecture**
+
+> **Note:** Specific models, datasets, reconstruction techniques, and supported medical conditions will be documented here as the project implementation is finalized.
+
+---
+
+## 🔄 System Workflow
+
+```text
+        Medical Imaging Data
+                 │
+                 ▼
+       ┌───────────────────┐
+       │ Image Preprocessing│
+       └─────────┬─────────┘
+                 │
+                 ▼
+       ┌───────────────────┐
+       │ AI-Based Feature  │
+       │     Extraction    │
+       └─────────┬─────────┘
+                 │
+                 ▼
+       ┌───────────────────┐
+       │ 3D Reconstruction │
+       └─────────┬─────────┘
+                 │
+                 ▼
+       ┌───────────────────┐
+       │ 3D Visualization  │
+       └─────────┬─────────┘
+                 │
+                 ▼
+       ┌───────────────────┐
+       │ Disease Analysis  │
+       └─────────┬─────────┘
+                 │
+                 ▼
+          Analysis / Results
 ```
-.
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── v1/
-│   │   │   │   ├── endpoints/
-│   │   │   │   │   ├── health.py        # System health & model status
-│   │   │   │   │   ├── patients.py      # Patient registration & CRUD
-│   │   │   │   │   ├── scans.py         # CT scan upload & 3D reconstruction
-│   │   │   │   │   ├── inference.py     # 3D CNN inference & slice heatmaps
-│   │   │   │   │   └── reports.py       # Clinical diagnostic report generation
-│   │   │   │   └── router.py            # API V1 router
-│   │   ├── core/
-│   │   │   ├── config.py                # Environment configuration
-│   │   │   └── logging.py               # Structured logging
-│   │   ├── db/
-│   │   │   ├── session.py               # SQLAlchemy engine & session factory
-│   │   │   └── mongo.py                 # MongoDB client & fallback document store
-│   │   ├── models/
-│   │   │   ├── sql/                     # PostgreSQL models (Patient, CTScan, etc.)
-│   │   │   └── nosql/                   # MongoDB document schemas (DicomMetadata, etc.)
-│   │   ├── schemas/                     # Pydantic v2 request/response contracts
-│   │   ├── services/
-│   │   │   ├── storage_service.py       # Chunked streaming upload & storage
-│   │   │   ├── dicom_processor.py       # 3D HU conversion & windowing pipeline
-│   │   │   ├── model_service.py         # 3D CNN model architecture & Grad-CAM
-│   │   │   └── report_service.py        # Fleischner diagnostic report generator
-│   │   └── main.py                      # FastAPI lifespan application entrypoint
-│   ├── tests/                           # Complete Pytest integration test suite
-│   ├── Dockerfile                       # Multi-stage production container
-│   ├── requirements.txt                 # Backend Python dependencies
-│   └── .env.example                     # Environment variables template
-├── scripts/
-│   └── demo_pipeline.py                 # Interactive end-to-end pipeline demonstration
-├── docker-compose.yml                   # Multi-container production deployment
-├── ARCHITECTURE.md                      # Detailed system architecture document
-├── API_CONTRACT.md                      # Complete REST API specification
-└── README.md                            # Main project overview
+
+---
+
+## 🏗️ High-Level Architecture
+
+```text
+┌───────────────────────────────┐
+│       User / Medical Data     │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│      Data Preprocessing       │
+│  • Cleaning                   │
+│  • Normalization              │
+│  • Image Preparation          │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│        AI / ML Pipeline       │
+│  • Feature Extraction         │
+│  • Image Analysis             │
+│  • Reconstruction              │
+└───────────────┬───────────────┘
+                │
+          ┌─────┴─────┐
+          ▼           ▼
+┌────────────────┐ ┌────────────────┐
+│ 3D Reconstruction│ │Disease Analysis│
+└───────┬────────┘ └───────┬────────┘
+        │                  │
+        └────────┬─────────┘
+                 ▼
+      ┌──────────────────────┐
+      │ Visualization &      │
+      │ Analysis Results     │
+      └──────────────────────┘
 ```
 
 ---
 
-## 3. Quickstart & Local Setup
+## 🛠️ Technologies
 
-### Prerequisites
-- Python 3.11+
-- Virtual environment (recommended)
+### Technology Stack
 
-### Installation
+- **Programming Language:** Python 3.10+
+- **AI / ML Framework:** TensorFlow 2.13+ / Keras
+- **Medical Imaging:** NiBabel (NIfTI), MedMNIST3D (OrganMNIST3D, etc.)
+- **Computer Vision & Scientific Computing:** NumPy, SciPy (`scipy.ndimage`), scikit-image (Marching Cubes)
+- **3D Reconstruction & Visualization:** Plotly (interactive 3D WebGL isosurfaces), Matplotlib, Seaborn
+- **Metrics & Evaluation:** scikit-learn (Accuracy, Precision, Recall, F1, ROC-AUC)
+- **Configuration & Utilities:** PyYAML, TQDM, Python standard logging
+- **Testing:** Pytest, Pytest-cov
+
+---
+
+## 📂 Project Structure
+
+```text
+AI-3D-Image-Reconstruction/
+│
+├── config/
+│   └── config.yaml          # Unified parameters (model, preprocessing, training, paths)
+│
+├── data/
+│   ├── raw/                 # Raw datasets (NIfTI scans, MedMNIST downloads)
+│   ├── processed/           # Preprocessed cached volumes
+│   └── README.md
+│
+├── docs/
+│   ├── sprint1_input_data_specification.md
+│   ├── sprint2_architecture_specification.md
+│   ├── sprint3_training_evaluation_specification.md
+│   ├── sprint4_model_optimization_packaging_specification.md
+│   ├── sprint5_final_model_validation_specification.md
+│   └── sprint6_integration_testing_specification.md
+│
+├── models/
+│   ├── checkpoints/         # Model weights & best checkpoint saves
+│   └── README.md
+│
+├── results/
+│   ├── plots/               # Confusion matrix, ROC curves, training curves
+│   └── reconstruction/      # MIP, orthogonal slice PNGs, 3D HTML isosurfaces
+│
+├── src/
+│   ├── disease_analysis/    # Prediction, probability distribution, confidence scoring
+│   ├── inference/           # Model packaging, TFLite export, standalone InferenceEngine
+│   ├── model/               # 3D CNN architecture, ModelTrainer, ModelEvaluator
+│   ├── preprocessing/       # Volume loader, resizer, normalizer, pipeline
+│   ├── reconstruction/      # Slicing, MIP projections, 3D marching cubes meshes
+│   ├── validation/          # ModelValidator suite for test cases
+│   └── utils/               # Config loader, logger factory, metric calculations
+│
+├── tests/                   # Pytest test suite (fixtures, preprocessing, model, trainer)
+│
+├── main.py                  # Unified command-line interface (CLI)
+├── requirements.txt         # Project dependencies
+├── setup.py                 # Package setup and build specification
+└── README.md
+```
+
+---
+
+## ⚙️ Installation
+
+### 1. Clone the Repository
+
 ```bash
-# Clone and navigate into directory
-cd backend
+git clone <REPOSITORY_URL>
+cd "Final Project"
+```
 
-# Install dependencies
+### 2. Create a Virtual Environment
+
+```bash
+python -m venv venv
+```
+
+### 3. Activate the Environment
+
+#### Windows
+```bash
+venv\Scripts\activate
+```
+
+#### Linux / macOS
+```bash
+source venv/bin/activate
+```
+
+### 4. Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Run the FastAPI Server
+---
+
+## 🚀 Usage
+
+The project provides a unified CLI via `main.py`:
+
+### 1. Run Preprocessing (Sprint 1)
 ```bash
-# Start backend server with hot-reload
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python main.py preprocess --config config/config.yaml
 ```
-Access the interactive documentation:
-- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **Health Check**: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
+
+### 2. Train 3D CNN Model (Sprints 2 & 3)
+```bash
+python main.py train --config config/config.yaml
+```
+
+### 3. Evaluate Model on Test Split (Sprint 3)
+```bash
+python main.py evaluate --config config/config.yaml
+```
+
+### 4. Disease Analysis & Confidence Scoring
+```bash
+python main.py predict --input path/to/scan.nii.gz --config config/config.yaml
+```
+
+### 5. 3D Visual Reconstruction & Projections
+```bash
+python main.py reconstruct --input path/to/scan.nii.gz --output-dir results/reconstruction/
+```
+
+### 6. Package Model for Deployment (Sprint 4)
+```bash
+python main.py package --export-name 3d_cnn_packaged --export-tflite --quantize
+```
+
+### 7. Run Final Model Validation (Sprint 5)
+```bash
+python main.py validate --num-test-cases 5 --threshold 0.50
+```
+
+### 8. Run End-to-End Integration Test (Sprint 6)
+```bash
+python main.py integration-test
+```
+
+### 9. Run End-to-End Demonstration
+```bash
+python main.py demo
+```
+
+### 7. Run Test Suite
+```bash
+pytest
+```
 
 ---
 
-## 4. Running Tests
+## 📊 Results
 
-The test suite validates the entire medical imaging lifecycle (health, patient records, scan upload, 3D volume reconstruction, 3D CNN inference, and report generation):
+The final version of this section will contain:
 
-```bash
-# Run all unit and integration tests
-python -m pytest backend/tests -v
+- 3D reconstruction examples
+- Input vs. reconstructed output
+- Disease analysis results
+- Model performance metrics
+- Accuracy / precision / recall where applicable
+- Visualization screenshots
+- Performance comparison
+
+### Example
+
+```text
+Input Image
+     │
+     ▼
+AI Processing
+     │
+     ▼
+3D Reconstruction
+     │
+     ▼
+Disease Analysis
+     │
+     ▼
+Final Visualization
 ```
 
 ---
 
-## 5. Interactive Pipeline Demo
+## 🔬 Research & Development
 
-To execute the entire end-to-end medical workflow in a single command:
+This project explores the intersection of:
 
-```bash
-python scripts/demo_pipeline.py
-```
+- Artificial Intelligence
+- Machine Learning
+- Computer Vision
+- Medical Image Processing
+- 3D Reconstruction
+- Image Segmentation
+- Pattern Recognition
+- AI-Assisted Disease Analysis
 
-This script will:
-1. Initialize the backend and warm up the 3D CNN model.
-2. Register a patient with a unique Medical Record Number (MRN).
-3. Upload and reconstruct a high-resolution 3D thoracic CT volume in Hounsfield Units.
-4. Execute 3D CNN forward inference, printing 3D nodule bounding boxes and malignancy scores.
-5. Generate and print a clinical diagnostic report adhering to Fleischner Society guidelines.
+The system is intended to demonstrate the potential applications of these technologies in medical imaging research.
 
 ---
 
-## 6. Docker Deployment
+## 🔮 Future Scope
 
-Deploy the complete stack (FastAPI backend, PostgreSQL 16, MongoDB 7.0, Redis 7, and Adminer):
+Possible future improvements include:
 
-```bash
-# Build and start all microservices
-docker compose up --build -d
+- Support for additional medical imaging modalities.
+- Improved 3D reconstruction quality.
+- Integration of more advanced deep learning models.
+- Support for additional diseases and conditions.
+- Improved segmentation and localization.
+- Faster inference and reconstruction.
+- Cloud-based deployment.
+- Interactive 3D visualization.
+- Integration with medical imaging standards.
+- Larger and more diverse datasets.
+- Extensive validation using clinically relevant datasets.
 
-# Check service status
-docker compose ps
+---
 
-# View backend logs
-docker compose logs -f backend
-```
+## ⚠️ Disclaimer
 
-Services exposed:
-- **FastAPI Backend**: `http://localhost:8000`
-- **PostgreSQL**: `localhost:5432` (`user=postgres`, `password=postgrespassword`, `db=medvision_db`)
-- **MongoDB**: `localhost:27017` (`user=root`, `password=mongopassword`)
-- **Adminer DB Manager**: `http://localhost:8080`
+This project is developed as a **final-year academic and research project**.
+
+The disease analysis functionality is intended for **research and educational purposes only** and should not be considered a substitute for diagnosis, treatment, or medical advice from a qualified healthcare professional.
+
+Any AI-generated result should be interpreted by appropriately qualified medical professionals before being used for clinical decision-making.
+
+---
+
+## 👨‍💻 Contributors
+
+**Naman Verma**  
+**Mohd Rafey**  
+**Mayuri Agarwal**  
+**Mohit Chaudhary**
+
+---
+
+## 📄 License
+
+This project is currently intended for academic and educational purposes.
+
+A formal license will be added to the repository after the project requirements and ownership terms are finalized.
+
+---
+
+## ⭐ Acknowledgements
+
+We would like to acknowledge our faculty, mentors, research resources, open-source technologies, and datasets that contribute to the development of this project.
+
+---
+
+<p align="center">
+  <b>AI-Powered 3D Image Reconstruction and Disease Analysis</b>
+  <br>
+  Final Year Project
+</p>

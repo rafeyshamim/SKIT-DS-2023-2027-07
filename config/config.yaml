@@ -1,0 +1,184 @@
+# ==============================================================================
+# AI-Powered 3D Medical Image Reconstruction and Disease Analysis
+# Project ID : SKIT/DS/2023-2027/CSE-F-07
+# Sprint     : S1 (Input Spec) + S2 (Architecture) + S3 (Training/Evaluation)
+#
+# This file is the single source of truth for ALL configurable parameters.
+# Edit this file rather than hard-coding values anywhere in the source code.
+# ==============================================================================
+
+
+# ------------------------------------------------------------------------------
+# DATA CONFIGURATION
+# ------------------------------------------------------------------------------
+data:
+  # Dataset to use.
+  # Options (MedMNIST3D): "organmnist3d" | "nodulemnist3d" |
+  #                        "fracturemnist3d" | "adrenalmnist3d" |
+  #                        "vesselmnist3d"  | "synapsemnist3d"
+  # Set source to "nifti" for custom NIfTI volumes.
+  dataset_name: "organmnist3d"
+  source: "medmnist"          # "medmnist" | "nifti"
+
+  # Path used only when source == "nifti".
+  # Expected structure: nifti_dir/train|val|test/<class_name>/*.nii.gz
+  nifti_dir: "data/raw/"
+
+  # Number of output disease/class categories.
+  # organmnist3d = 11  |  nodulemnist3d = 2  |  fracturemnist3d = 3
+  num_classes: 11
+
+  # Human-readable class names in class-index order.
+  # Update this list if you change the dataset.
+  class_labels:
+    - "Liver"
+    - "Right Kidney"
+    - "Spleen"
+    - "Pancreas"
+    - "Aorta"
+    - "Inferior Vena Cava"
+    - "Right Adrenal Gland"
+    - "Left Adrenal Gland"
+    - "Gallbladder"
+    - "Esophagus"
+    - "Left Kidney"
+
+
+# ------------------------------------------------------------------------------
+# SPRINT 1 — CNN INPUT DATA SPECIFICATION
+# Input volume format, dimensions, channels, dtype, normalization.
+# ------------------------------------------------------------------------------
+preprocessing:
+  # === INPUT VOLUME SPECIFICATION (Sprint 1 deliverable) ===
+  #
+  # Format       : 3D volumetric tensor
+  # Source format: NIfTI (.nii / .nii.gz) or MedMNIST3D numpy arrays
+  # Target shape : (D, H, W, C) = (64, 64, 64, 1)
+  # Data type    : float32
+  # Value range  : [0.0, 1.0]  after min-max normalization
+  #
+  # Preprocessing steps applied before the volume enters the 3D CNN:
+  #   1. Load volume (NIfTI via nibabel  OR  MedMNIST3D numpy array)
+  #   2. Squeeze any existing channel dimension -> shape (D, H, W)
+  #   3. Resize (trilinear interpolation) -> target_size
+  #   4. Intensity normalization           -> normalize_method
+  #   5. Data augmentation (training only) -> augmentation.*
+  #   6. Add channel dimension             -> (D, H, W, 1)
+
+  # Target spatial dimensions [Depth, Height, Width] in voxels.
+  target_size: [64, 64, 64]
+
+  # Number of input channels (1 = grayscale).
+  num_channels: 1
+
+  # Normalization method applied after resizing.
+  # "min_max" scales all intensity values to [0, 1].
+  # "z_score" standardizes to zero mean and unit variance.
+  normalize_method: "min_max"
+
+  # Clip voxel intensities before normalization.
+  # Useful for CT scans where HU values may contain extreme outliers.
+  clip_values: false
+  clip_min: -1000   # HU lower bound (e.g. for CT)
+  clip_max:  1000   # HU upper bound (e.g. for CT)
+
+  # Data augmentation — applied to training volumes ONLY.
+  augmentation:
+    enabled: true
+    random_flip_axis: [0, 1, 2]   # Randomly flip along depth/height/width
+    rotation_range: 10             # Max rotation ± degrees (in H-W plane)
+    zoom_range: 0.1                # Max zoom fraction ± 10 %
+
+
+# ------------------------------------------------------------------------------
+# SPRINT 2 — 3D CNN ARCHITECTURE
+# Model input tensor shape, layer configuration, regularization.
+# ------------------------------------------------------------------------------
+model:
+  # === INPUT TENSOR SHAPE ===
+  # Must equal preprocessing.target_size + [preprocessing.num_channels].
+  # Shape: (D, H, W, C)
+  input_shape: [64, 64, 64, 1]
+
+  # Number of Conv3D filters per block (one block per entry).
+  # The last block does NOT apply max-pooling to avoid over-downsampling.
+  filters: [32, 64, 128, 256]
+
+  # Convolution kernel size (same for all blocks).
+  kernel_size: [3, 3, 3]
+
+  # Dense (fully-connected) layer sizes in the classification head.
+  # Listed in order; a Dropout layer follows each Dense layer.
+  dense_units: [512, 256]
+
+  # Dropout probability applied after each dense layer.
+  dropout_rate: 0.5
+
+  # L2 regularization coefficient for Conv3D kernel weights.
+  l2_reg: 0.001
+
+
+# ------------------------------------------------------------------------------
+# SPRINT 3 — MODEL TRAINING & EVALUATION
+# Optimizer, loss, epochs, callbacks, metrics.
+# ------------------------------------------------------------------------------
+training:
+  batch_size: 4
+  epochs: 50
+  learning_rate: 0.001
+  optimizer: "adam"               # "adam" | "sgd" | "rmsprop"
+  loss: "sparse_categorical_crossentropy"
+  metrics: ["accuracy"]
+
+  # Random seed for reproducibility.
+  seed: 42
+
+  # Early stopping — stops training when the monitored metric stops improving.
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"
+    patience: 10
+    restore_best_weights: true
+
+  # Reduce learning rate on plateau.
+  reduce_lr:
+    enabled: true
+    monitor: "val_loss"
+    patience: 5
+    factor: 0.5
+    min_lr: 0.000001
+
+
+# ------------------------------------------------------------------------------
+# PATHS
+# All output directories.  Created automatically at runtime if they do not exist.
+# ------------------------------------------------------------------------------
+paths:
+  data_dir:           "data/"
+  raw_data_dir:       "data/raw/"
+  processed_data_dir: "data/processed/"
+  model_dir:          "models/"
+  checkpoint_dir:     "models/checkpoints/"
+  logs_dir:           "logs/"
+  results_dir:        "results/"
+  plots_dir:          "results/plots/"
+
+
+# ------------------------------------------------------------------------------
+# INFERENCE (Sprint 4 / standalone usage)
+# ------------------------------------------------------------------------------
+inference:
+  # Minimum confidence score for a prediction to be flagged as "above threshold".
+  confidence_threshold: 0.5
+
+  # Default model path used by inference.py.
+  model_path: "models/checkpoints/best_model.keras"
+
+
+# ------------------------------------------------------------------------------
+# LOGGING
+# ------------------------------------------------------------------------------
+logging:
+  level: "INFO"                   # DEBUG | INFO | WARNING | ERROR
+  log_to_file: true
+  log_file: "logs/training.log"
