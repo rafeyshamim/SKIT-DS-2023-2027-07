@@ -1,0 +1,107 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medvision_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PROJECT_NAME=MedVision 3D CT Diagnostic Backend
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/medvision_db
+      - MONGODB_URL=mongodb://root:mongopassword@mongodb:27017
+      - MONGODB_DATABASE=medvision_metadata
+      - MODEL_NAME=MedNet-3D-CNN
+      - MODEL_VERSION=v1.2.0
+    volumes:
+      - backend_uploads:/app/data/uploads
+      - backend_processed:/app/data/processed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - medvision_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: medvision_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: medvision_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d medvision_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medvision_network
+
+  mongodb:
+    image: mongo:7.0
+    container_name: medvision_mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: mongopassword
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medvision_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: medvision_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medvision_network
+
+  adminer:
+    image: adminer:latest
+    container_name: medvision_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - medvision_network
+
+networks:
+  medvision_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+  backend_uploads:
+  backend_processed:
