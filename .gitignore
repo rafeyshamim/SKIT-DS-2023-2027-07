@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# TensorFlow / Keras
+*.h5
+*.keras
+*.pb
+*.ckpt
+*.ckpt.index
+*.ckpt.data-*
+checkpoint
+
+# Data (do not commit raw/processed medical data)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model Checkpoints (large files)
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+
+# Logs and Results
+logs/
+results/
+!results/.gitkeep
+
+# Jupyter Notebooks (checkpoints)
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.coveragerc
+
+# Environment variables
+.env
+.env.*
