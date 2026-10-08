@@ -1,7 +1,12 @@
-# ==============================================================================
+ naman/frontend-wireframes
+streamlit>=1.35
+SimpleITK>=2.3
+requests>=2.31
+=======
+# 
 # AI-Powered 3D Medical Image Reconstruction and Disease Analysis
 # Project ID: SKIT/DS/2023-2027/CSE-F-07
-# ==============================================================================
+# 
 
 # Core AI / ML Framework
 tensorflow>=2.13.0
@@ -37,3 +42,4 @@ tqdm>=4.65.0             # Progress bars
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0        # Code coverage reporting
+ main
