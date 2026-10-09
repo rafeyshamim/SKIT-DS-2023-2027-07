@@ -230,48 +230,109 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 Usage
+## 💻 Web Application & Interactive UI (React + FastAPI)
 
-The project provides a unified CLI via `main.py`:
+MedVision 3D includes a full-stack, end-to-end clinical interface built with **React 19 + Vite** and a high-performance **FastAPI** backend:
 
-### 1. Run Preprocessing (Sprint 1)
+### Architecture:
+- **Frontend**: React 19, Lucide Icons, HTML5 Canvas 2D/3D Rendering, Glassmorphic Clinical Cyberpunk Design System (`http://localhost:3000`).
+- **Backend**: FastAPI, SQLAlchemy + SQLite, NoSQL Document Store, 3D CNN Inference Engine (`http://127.0.0.1:8000`).
+- **Pipeline**: Automated multiplanar slice reformatting, 3D marching cubes isosurface extraction, 3D CNN lesion localization, and Fleischner Society clinical reporting.
+
+### 🌟 4 Core End-to-End Screens:
+1. **CT Scan Ingestion & Upload (`Screen 1`)**:
+   - Supports multi-part DICOM, NIfTI (.nii, .nii.gz), ZIP slice archives, and Numpy (.npy) volumes.
+   - Includes **Instant Demo Mode** button to synthesize calibrated 32-slice thoracic CT scans with lung parenchyma.
+   - Patient registration & MRN tracking.
+2. **3D Multiplanar Organ & Slice Scrubber (`Screen 2`)**:
+   - Multiplanar 2D slice scrubber (Axial, Coronal, Sagittal views).
+   - Automated animation playback, scrubbing slider, and slice jumping.
+   - Clinical window presets (Lung, Bone, Soft Tissue).
+   - Real-time AI Saliency & Heatmap layer with opacity control.
+   - Interactive 3D WebGL / Canvas volumetric organ isosurface with rotation, zoom, and 3D bounding box overlay.
+3. **AI Disease Analysis & Quantitative Findings (`Screen 3`)**:
+   - 3D CNN primary diagnosis and circular confidence percentage meter.
+   - Multi-class softmax probability breakdown.
+   - Volumetric metrics: Total lung volume (cm³), lesion volume (mm³), lung involvement percentage (%).
+   - Detected 3D lesion table with 3D centroid coordinates and malignancy scoring.
+   - Printable Fleischner Society clinical diagnostic report with radiologist sign-off.
+4. **AI Model Training & Online Dataset Dashboard (`Screen 4`)**:
+   - Online MedMNIST3D dataset ingestion & verification status (31.1 MB verified from Zenodo).
+   - Background training trigger with selectable epoch intervals.
+   - Live loss and accuracy convergence progression graphs.
+   - Checkpoint inspection and model metadata.
+
+### 🚀 Running the Full-Stack Application:
+
+#### Option A: One-Command Full-Stack Runner
+```bash
+python scripts/run_system.py
+```
+This automatically launches both the FastAPI backend (`http://127.0.0.1:8000`) and the React frontend (`http://localhost:3000`).
+
+#### Option B: Manual Execution
+
+**1. Launch FastAPI Backend:**
+```bash
+venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
+```
+
+**2. Launch React Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your web browser.
+
+**3. Run Automated End-to-End Pipeline Test:**
+```bash
+python scripts/test_e2e.py
+```
+
+---
+
+## 🚀 Unified CLI Usage
+
+The project also provides a unified CLI via `main.py`:
+
+### 1. Download / Verify Online Dataset (MedMNIST3D)
+```bash
+python scripts/download_dataset.py
+```
+
+### 2. Run Preprocessing (Sprint 1)
 ```bash
 python main.py preprocess --config config/config.yaml
 ```
 
-### 2. Train 3D CNN Model (Sprints 2 & 3)
+### 3. Train 3D CNN Model on Online Dataset (Sprints 2 & 3)
 ```bash
 python main.py train --config config/config.yaml
 ```
 
-### 3. Evaluate Model on Test Split (Sprint 3)
+### 4. Evaluate Model on Test Split (Sprint 3)
 ```bash
 python main.py evaluate --config config/config.yaml
 ```
 
-### 4. Disease Analysis & Confidence Scoring
+### 5. Disease Analysis & Confidence Scoring
 ```bash
 python main.py predict --input path/to/scan.nii.gz --config config/config.yaml
 ```
 
-### 5. 3D Visual Reconstruction & Projections
+### 6. 3D Visual Reconstruction & Projections
 ```bash
 python main.py reconstruct --input path/to/scan.nii.gz --output-dir results/reconstruction/
 ```
 
-### 6. Package Model for Deployment (Sprint 4)
+### 7. Package Model for Deployment (Sprint 4)
 ```bash
 python main.py package --export-name 3d_cnn_packaged --export-tflite --quantize
 ```
 
-### 7. Run Final Model Validation (Sprint 5)
+### 8. Run Final Model Validation (Sprint 5)
 ```bash
 python main.py validate --num-test-cases 5 --threshold 0.50
-```
-
-### 8. Run End-to-End Integration Test (Sprint 6)
-```bash
-python main.py integration-test
 ```
 
 ### 9. Run End-to-End Demonstration
@@ -279,7 +340,7 @@ python main.py integration-test
 python main.py demo
 ```
 
-### 7. Run Test Suite
+### 10. Run Pytest Test Suite
 ```bash
 pytest
 ```

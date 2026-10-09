@@ -1,12 +1,9 @@
- naman/frontend-wireframes
-streamlit>=1.35
-SimpleITK>=2.3
-requests>=2.31
-=======
-# 
 # AI-Powered 3D Medical Image Reconstruction and Disease Analysis
 # Project ID: SKIT/DS/2023-2027/CSE-F-07
-# 
+
+# Frontend
+streamlit>=1.35
+requests>=2.31
 
 # Core AI / ML Framework
 tensorflow>=2.13.0
@@ -18,6 +15,7 @@ scipy>=1.11.0
 # Medical Imaging
 nibabel>=5.1.0           # NIfTI file loading
 medmnist>=2.2.3          # MedMNIST3D benchmark datasets
+SimpleITK>=2.3           # SimpleITK image processing
 
 # Computer Vision / Image Processing
 scikit-image>=0.21.0     # Marching cubes, image utilities
@@ -42,4 +40,21 @@ tqdm>=4.65.0             # Progress bars
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0        # Code coverage reporting
- main
+
+# Backend API (FastAPI)
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+python-multipart>=0.0.9
+sqlalchemy>=2.0.28
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+motor>=3.3.2
+pymongo>=4.6.2
+httpx>=0.27.0
+pytest-asyncio>=0.23.5
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-dotenv>=1.0.1
+pydantic[email]>=2.6.0

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # Storage Paths
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    PROJECT_ROOT: str = os.path.dirname(BASE_DIR)
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", os.path.join(BASE_DIR, "data", "uploads"))
     PROCESSED_DIR: str = os.getenv("PROCESSED_DIR", os.path.join(BASE_DIR, "data", "processed"))
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "500"))
