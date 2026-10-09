@@ -17,7 +17,7 @@ data:
   #                        "fracturemnist3d" | "adrenalmnist3d" |
   #                        "vesselmnist3d"  | "synapsemnist3d"
   # Set source to "nifti" for custom NIfTI volumes.
-  dataset_name: "organmnist3d"
+  dataset_name: "nodulemnist3d"
   source: "medmnist"          # "medmnist" | "nifti"
 
   # Path used only when source == "nifti".
@@ -26,22 +26,12 @@ data:
 
   # Number of output disease/class categories.
   # organmnist3d = 11  |  nodulemnist3d = 2  |  fracturemnist3d = 3
-  num_classes: 11
+  num_classes: 2
 
   # Human-readable class names in class-index order.
-  # Update this list if you change the dataset.
   class_labels:
-    - "Liver"
-    - "Right Kidney"
-    - "Spleen"
-    - "Pancreas"
-    - "Aorta"
-    - "Inferior Vena Cava"
-    - "Right Adrenal Gland"
-    - "Left Adrenal Gland"
-    - "Gallbladder"
-    - "Esophagus"
-    - "Left Kidney"
+    - "Benign Pulmonary Nodule"
+    - "Malignant Lung Cancer"
 
 
 # ------------------------------------------------------------------------------
@@ -66,7 +56,7 @@ preprocessing:
   #   6. Add channel dimension             -> (D, H, W, 1)
 
   # Target spatial dimensions [Depth, Height, Width] in voxels.
-  target_size: [64, 64, 64]
+  target_size: [28, 28, 28]
 
   # Number of input channels (1 = grayscale).
   num_channels: 1
@@ -98,7 +88,7 @@ model:
   # === INPUT TENSOR SHAPE ===
   # Must equal preprocessing.target_size + [preprocessing.num_channels].
   # Shape: (D, H, W, C)
-  input_shape: [64, 64, 64, 1]
+  input_shape: [28, 28, 28, 1]
 
   # Number of Conv3D filters per block (one block per entry).
   # The last block does NOT apply max-pooling to avoid over-downsampling.
@@ -123,8 +113,8 @@ model:
 # Optimizer, loss, epochs, callbacks, metrics.
 # ------------------------------------------------------------------------------
 training:
-  batch_size: 4
-  epochs: 50
+  batch_size: 16
+  epochs: 5
   learning_rate: 0.001
   optimizer: "adam"               # "adam" | "sgd" | "rmsprop"
   loss: "sparse_categorical_crossentropy"

@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status
 from fastapi.responses import FileResponse
@@ -15,6 +16,7 @@ from app.schemas.scan import (
 )
 from app.services.storage_service import storage_service
 from app.services.dicom_processor import dicom_processor
+from app.core.config import settings
 from app.core.logging import logger
 
 router = APIRouter()
@@ -190,3 +192,239 @@ def download_processed_volume(scan_id: int, db: Session = Depends(get_db)):
         media_type="application/octet-stream",
         filename=f"{scan.scan_uid}_volume.npy"
     )
+
+
+@router.get("/{scan_id}/slices/{slice_idx}", summary="Get 2D Slice Matrix for Interactive Scrubber")
+def get_scan_slice(
+    scan_id: int,
+    slice_idx: int,
+    plane: str = "axial",
+    db: Session = Depends(get_db)
+):
+    """
+    Returns 2D intensity grid for multiplanar reformatting (axial, coronal, sagittal).
+    """
+    scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
+    if not scan or not scan.processed_volume_path or not os.path.exists(scan.processed_volume_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Volume not found. Run processing first.")
+
+    vol = np.load(scan.processed_volume_path)  # shape (1, D, H, W) or (D, H, W)
+    if vol.ndim == 4:
+        vol = vol[0]
+
+    d, h, w = vol.shape
+
+    if plane == "axial":
+        total_slices = d
+        if slice_idx < 0 or slice_idx >= d:
+            slice_idx = max(0, min(d - 1, slice_idx))
+        slice_2d = vol[slice_idx, :, :]
+    elif plane == "coronal":
+        total_slices = h
+        if slice_idx < 0 or slice_idx >= h:
+            slice_idx = max(0, min(h - 1, slice_idx))
+        slice_2d = vol[:, slice_idx, :]
+    elif plane == "sagittal":
+        total_slices = w
+        if slice_idx < 0 or slice_idx >= w:
+            slice_idx = max(0, min(w - 1, slice_idx))
+        slice_2d = vol[:, :, slice_idx]
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="plane must be axial, coronal, or sagittal")
+
+    h_out, w_out = slice_2d.shape
+    # Round to 3 decimals to reduce payload size over JSON
+    pixels = np.round(slice_2d, 3).tolist()
+
+    return {
+        "scan_id": scan_id,
+        "plane": plane,
+        "slice_index": slice_idx,
+        "total_slices": total_slices,
+        "width": w_out,
+        "height": h_out,
+        "min_val": float(np.min(slice_2d)),
+        "max_val": float(np.max(slice_2d)),
+        "pixels": pixels
+    }
+
+
+@router.get("/{scan_id}/mesh3d", summary="Get 3D Organ Isosurface / Point Cloud Coordinates")
+def get_scan_mesh3d(
+    scan_id: int,
+    iso_threshold: float = 0.25,
+    max_points: int = 2500,
+    db: Session = Depends(get_db)
+):
+    """
+    Returns 3D spatial points [x, y, z, intensity] above the selected threshold
+    for interactive WebGL / Canvas 3D rendering in React.
+    """
+    scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
+    if not scan or not scan.processed_volume_path or not os.path.exists(scan.processed_volume_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Volume not found.")
+
+    vol = np.load(scan.processed_volume_path)
+    if vol.ndim == 4:
+        vol = vol[0]
+
+    d, h, w = vol.shape
+    z_coords, y_coords, x_coords = np.where(vol >= iso_threshold)
+    
+    total_found = len(z_coords)
+    if total_found == 0:
+        return {"scan_id": scan_id, "points": [], "total_points": 0, "dimensions": [d, h, w]}
+
+    step = max(1, total_found // max_points)
+    sampled_indices = np.arange(0, total_found, step)[:max_points]
+
+    points = []
+    for idx in sampled_indices:
+        zi = int(z_coords[idx])
+        yi = int(y_coords[idx])
+        xi = int(x_coords[idx])
+        val = float(round(float(vol[zi, yi, xi]), 3))
+        # Normalize to centered coordinates [-1, 1]
+        nx = round((xi / (w - 1)) * 2.0 - 1.0, 3)
+        ny = round((yi / (h - 1)) * 2.0 - 1.0, 3)
+        nz = round((zi / (d - 1)) * 2.0 - 1.0, 3)
+        points.append([nx, ny, nz, val])
+
+    return {
+        "scan_id": scan_id,
+        "points": points,
+        "total_points": len(points),
+        "dimensions": [d, h, w],
+        "iso_threshold": iso_threshold
+    }
+
+
+@router.get("/{scan_id}/isosurface-html", summary="Get Interactive 3D Marching Cubes Isosurface HTML")
+def get_scan_isosurface_html(scan_id: int, db: Session = Depends(get_db)):
+    """
+    Renders or serves an interactive 3D WebGL isosurface HTML generated via marching cubes.
+    """
+    scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
+    if not scan or not scan.processed_volume_path or not os.path.exists(scan.processed_volume_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Volume not found.")
+
+    output_dir = os.path.join(settings.UPLOAD_DIR, "reconstruction")
+    os.makedirs(output_dir, exist_ok=True)
+    html_filename = f"scan_{scan.scan_uid}_isosurface_3d.html"
+    html_path = os.path.join(output_dir, html_filename)
+
+    if not os.path.exists(html_path):
+        from src.reconstruction.reconstructor import VolumeReconstructor
+        vol = np.load(scan.processed_volume_path)
+        if vol.ndim == 4:
+            vol = vol[0]
+        recon = VolumeReconstructor(output_dir=output_dir)
+        recon.plot_3d_isosurface(vol, title=f"3D Lung Reconstruction - {scan.scan_uid}", filename=html_filename)
+
+    return FileResponse(html_path, media_type="text/html")
+
+
+@router.get("/{scan_id}/mip", summary="Get Maximum Intensity Projection (MIP) Image")
+def get_scan_mip(scan_id: int, db: Session = Depends(get_db)):
+    """
+    Renders or serves the Maximum Intensity Projection (MIP) along axial, coronal, and sagittal axes.
+    """
+    scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
+    if not scan or not scan.processed_volume_path or not os.path.exists(scan.processed_volume_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Volume not found.")
+
+    output_dir = os.path.join(settings.UPLOAD_DIR, "reconstruction")
+    os.makedirs(output_dir, exist_ok=True)
+    mip_filename = f"scan_{scan.scan_uid}_mip.png"
+    mip_path = os.path.join(output_dir, mip_filename)
+
+    if not os.path.exists(mip_path):
+        from src.reconstruction.reconstructor import VolumeReconstructor
+        vol = np.load(scan.processed_volume_path)
+        if vol.ndim == 4:
+            vol = vol[0]
+        recon = VolumeReconstructor(output_dir=output_dir)
+        recon.plot_mip(vol, title=f"Maximum Intensity Projection - {scan.scan_uid}", filename=mip_filename)
+
+    return FileResponse(mip_path, media_type="image/png")
+
+
+@router.post("/sample", summary="Create Instant Demo Scan for Testing")
+def create_sample_scan(
+    modality: str = Form("CT"),
+    anatomical_region: str = Form("Chest / Thorax"),
+    patient_name: str = Form("John Anderson"),
+    patient_mrn: str = Form("MRN-2026-DEMO"),
+    db: Session = Depends(get_db)
+):
+    """
+    Instantly provisions a patient and high-fidelity volumetric CT scan
+    with full HU calibration, lung parenchyma, and pulmonary nodule.
+    """
+    patient = db.query(Patient).filter(Patient.medical_record_number == patient_mrn).first()
+    if not patient:
+        patient = Patient(
+            medical_record_number=patient_mrn,
+            full_name=patient_name,
+            gender="MALE",
+            date_of_birth="1968-05-14",
+            contact_email="j.anderson@example.org",
+            medical_history_notes="Long-term smoking history (35 pack-years), chronic cough, routine chest screening."
+        )
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+
+    # Generate synthetic DICOM scan
+    scan_uid = f"DEMO_{os.urandom(4).hex().upper()}"
+    raw_path = os.path.join(settings.UPLOAD_DIR, f"{scan_uid}.npy")
+    
+    # Process volume directly
+    processed_path, metadata, final_shape = dicom_processor.process_and_save_pipeline(
+        raw_path, scan_uid
+    )
+
+    scan = CTScan(
+        scan_uid=scan_uid,
+        patient_id=patient.id,
+        modality=modality,
+        anatomical_region=anatomical_region,
+        original_filename=f"{scan_uid}_thoracic_helical.dcm",
+        file_path=raw_path,
+        file_size_bytes=1024 * 1024 * 4,
+        status=ScanStatusEnum.PROCESSED.value,
+        processed_volume_path=processed_path,
+        slice_count=metadata.get("slice_count", 32),
+        slice_thickness_mm=metadata.get("slice_thickness_mm", 1.25),
+        pixel_spacing_xy="0.703x0.703"
+    )
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    mongo = get_mongo()
+    mongo_doc = {
+        "scan_id": scan.id,
+        "scan_uid": scan.scan_uid,
+        "scanner_manufacturer": metadata.get("scanner_manufacturer", "Siemens SOMATOM Force"),
+        "slice_count": scan.slice_count,
+        "slice_thickness_mm": scan.slice_thickness_mm,
+        "pixel_spacing": [0.703, 0.703],
+        "window_center": -600.0,
+        "window_width": 1500.0,
+        "volume_shape": list(final_shape),
+    }
+    mongo.insert_document("dicom_metadata", mongo_doc)
+
+    return {
+        "scan_id": scan.id,
+        "scan_uid": scan.scan_uid,
+        "patient_id": scan.patient_id,
+        "modality": scan.modality,
+        "anatomical_region": scan.anatomical_region,
+        "original_filename": scan.original_filename,
+        "status": scan.status,
+        "slice_count": scan.slice_count,
+        "message": "Demo scan synthesized and 3D reconstructed successfully.",
+        "created_at": scan.created_at
+    }
