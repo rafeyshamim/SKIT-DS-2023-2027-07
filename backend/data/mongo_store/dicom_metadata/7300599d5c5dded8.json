@@ -1,0 +1,19 @@
+{
+  "scan_id": 4,
+  "scan_uid": "DEMO_85A7E4AA",
+  "scanner_manufacturer": "Siemens Healthineers SOMATOM Force",
+  "slice_count": 32,
+  "slice_thickness_mm": 1.25,
+  "pixel_spacing": [
+    0.703,
+    0.703
+  ],
+  "window_center": -600.0,
+  "window_width": 1500.0,
+  "volume_shape": [
+    32,
+    64,
+    64
+  ],
+  "_id": "7300599d5c5dded8"
+}

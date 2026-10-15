@@ -1,0 +1,35 @@
+{
+  "model_name": "3D_CNN_Medical",
+  "input_shape": [
+    64,
+    64,
+    64,
+    1
+  ],
+  "num_classes": 11,
+  "class_names": {},
+  "preprocessing": {
+    "target_size": [
+      64,
+      64,
+      64
+    ],
+    "num_channels": 1,
+    "normalize_method": "min_max",
+    "clip_values": false,
+    "clip_min": -1000,
+    "clip_max": 1000,
+    "augmentation": {
+      "enabled": true,
+      "random_flip_axis": [
+        0,
+        1,
+        2
+      ],
+      "rotation_range": 10,
+      "zoom_range": 0.1
+    }
+  },
+  "parameters_count": 1429739,
+  "framework": "TensorFlow 2.21.0"
+}

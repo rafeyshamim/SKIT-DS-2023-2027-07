@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+htmlcov
+.git
+.gitignore
+.env
+*.db
+data/uploads/*
+data/processed/*
+data/mongo_store/*
+!data/uploads/.gitkeep
+!data/processed/.gitkeep
