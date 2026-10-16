@@ -37,3 +37,16 @@ def test_upload_and_process_scan(client):
     detail_res = client.get(f"/api/v1/scans/{scan_id}")
     assert detail_res.status_code == 200
     assert detail_res.json()["patient_mrn"] == "MRN-SCAN-TEST-2002"
+
+    # 5. Download preprocessed 3D volume (.npy)
+    download_res = client.get(f"/api/v1/scans/{scan_id}/download-volume")
+    assert download_res.status_code == 200
+    assert len(download_res.content) > 0
+
+    # 6. Delete CT scan and cleanup
+    del_res = client.delete(f"/api/v1/scans/{scan_id}")
+    assert del_res.status_code == 204
+
+    # Verify 404 after deletion
+    verify_res = client.get(f"/api/v1/scans/{scan_id}")
+    assert verify_res.status_code == 404

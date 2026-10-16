@@ -27,7 +27,7 @@ def generate_report(report_in: ReportCreate, db: Session = Depends(get_db)):
     """
     scan = db.query(CTScan).filter(CTScan.id == report_in.scan_id).first()
     if not scan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"CT Scan ID {report_in.scan_id} not found.")
 
     patient = scan.patient
 
@@ -57,31 +57,36 @@ def generate_report(report_in: ReportCreate, db: Session = Depends(get_db)):
         radiologist_name=report_in.radiologist_name
     )
 
-    report = Report(
-        scan_id=scan.id,
-        patient_id=patient.id,
-        inference_run_id=inference_run.id if inference_run else None,
-        radiologist_name=report_in.radiologist_name or generated["radiologist_name"],
-        clinical_history=report_in.clinical_history or generated["clinical_history"],
-        technique=report_in.technique or generated["technique"],
-        findings=report_in.findings or generated["findings"],
-        impression=report_in.impression or generated["impression"],
-        recommendations=report_in.recommendations or generated["recommendations"],
-        status=ReportStatusEnum.FINALIZED.value
-    )
-    db.add(report)
-    db.commit()
-    db.refresh(report)
+    try:
+        report = Report(
+            scan_id=scan.id,
+            patient_id=patient.id,
+            inference_run_id=inference_run.id if inference_run else None,
+            radiologist_name=report_in.radiologist_name or generated["radiologist_name"],
+            clinical_history=report_in.clinical_history or generated["clinical_history"],
+            technique=report_in.technique or generated["technique"],
+            findings=report_in.findings or generated["findings"],
+            impression=report_in.impression or generated["impression"],
+            recommendations=report_in.recommendations or generated["recommendations"],
+            status=ReportStatusEnum.FINALIZED.value
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
 
-    logger.info(f"Generated clinical report ID {report.id} for Scan ID {scan.id}, Patient {patient.medical_record_number}")
-    return report
+        logger.info(f"Generated clinical report ID {report.id} for Scan ID {scan.id}, Patient {patient.medical_record_number}")
+        return report
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to generate and save report: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save report.")
 
 
 @router.get("/{report_id}", response_model=ReportResponse, summary="Get Report by ID")
 def get_report(report_id: int, db: Session = Depends(get_db)):
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Report ID {report_id} not found.")
     return report
 
 
@@ -95,13 +100,35 @@ def get_reports_by_scan(scan_id: int, db: Session = Depends(get_db)):
 def update_report(report_id: int, report_update: ReportUpdate, db: Session = Depends(get_db)):
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Report ID {report_id} not found.")
 
     data = report_update.model_dump(exclude_unset=True)
-    for field, val in data.items():
-        setattr(report, field, val)
+    try:
+        for field, val in data.items():
+            setattr(report, field, val)
 
-    db.commit()
-    db.refresh(report)
-    logger.info(f"Updated clinical report ID {report.id}")
-    return report
+        db.commit()
+        db.refresh(report)
+        logger.info(f"Updated clinical report ID {report.id}")
+        return report
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update report ID {report_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update report.")
+
+
+@router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Report")
+def delete_report(report_id: int, db: Session = Depends(get_db)):
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Report ID {report_id} not found.")
+
+    try:
+        db.delete(report)
+        db.commit()
+        logger.info(f"Deleted report ID {report_id}")
+        return None
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete report ID {report_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete report.")

@@ -1,8 +1,8 @@
-import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Float
 from sqlalchemy.orm import relationship
 import enum
 from app.db.session import Base
+from app.core.utils import get_utc_now
 
 
 class InferenceStatusEnum(str, enum.Enum):
@@ -39,7 +39,7 @@ class InferenceRun(Base):
     processing_time_ms = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
     
-    started_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, default=get_utc_now, nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
     # Relationships

@@ -35,11 +35,25 @@ def test_clinical_report_generation(client):
     assert len(report_data["impression"]) > 0
     assert "Fleischner" in report_data["recommendations"]
 
-    # 3. Update / Radiologist Sign-off
     rep_id = report_data["id"]
+
+    # 3. Retrieve Report by Scan ID
+    by_scan_res = client.get(f"/api/v1/reports/scan/{scan_id}")
+    assert by_scan_res.status_code == 200
+    assert by_scan_res.json()["total"] >= 1
+
+    # 4. Update / Radiologist Sign-off
     update_res = client.put(f"/api/v1/reports/{rep_id}", json={
         "status": "FINALIZED",
         "impression": "FINAL SIGN-OFF: Confirmed suspicious nodule. Urgent referral advised."
     })
     assert update_res.status_code == 200
     assert update_res.json()["status"] == "FINALIZED"
+
+    # 5. Delete Report
+    del_res = client.delete(f"/api/v1/reports/{rep_id}")
+    assert del_res.status_code == 204
+
+    # Verify 404 after deletion
+    verify_res = client.get(f"/api/v1/reports/{rep_id}")
+    assert verify_res.status_code == 404
