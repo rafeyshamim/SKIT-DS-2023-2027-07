@@ -1,0 +1,23 @@
+{
+  "scan_id": 4,
+  "scan_uid": "SCAN_10EBEC47E0DA",
+  "series_instance_uid": "1.2.840.113619.2.SCAN_10EBEC47E0DA.1",
+  "study_instance_uid": "1.2.840.113619.1.SCAN_10EBEC47E0DA.0",
+  "scanner_manufacturer": "Siemens Healthineers SOMATOM Force",
+  "slice_count": 32,
+  "slice_thickness_mm": 1.25,
+  "pixel_spacing": [
+    0.703125,
+    0.703125
+  ],
+  "rescale_slope": 1.0,
+  "rescale_intercept": -1024.0,
+  "window_center": -600.0,
+  "window_width": 1500.0,
+  "volume_shape": [
+    32,
+    64,
+    64
+  ],
+  "_id": "fff8d3e8040732cb"
+}

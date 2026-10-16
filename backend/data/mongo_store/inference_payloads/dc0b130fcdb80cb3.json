@@ -1,0 +1,116 @@
+{
+  "id": null,
+  "inference_run_id": 2,
+  "scan_id": 2,
+  "model_name": "MedNet-3D-CNN",
+  "model_version": "v1.2.0",
+  "class_probabilities": {
+    "Normal / No Nodule": 0.012199999764561653,
+    "Benign Pulmonary Nodule": 0.09000000357627869,
+    "Malignant Suspicion": 0.8978000283241272
+  },
+  "lesion_detections": [
+    {
+      "lesion_id": "LESION-1_7_6",
+      "nodule_type": "Spiculated Subpleural Pulmonary Nodule",
+      "centroid_voxel": {
+        "z": 15.5,
+        "y": 33.1,
+        "x": 31.8
+      },
+      "centroid_mm": {
+        "z": 19.4,
+        "y": 23.3,
+        "x": 22.3
+      },
+      "bounding_box_3d": {
+        "z_min": 0,
+        "z_max": 31,
+        "y_min": 5,
+        "y_max": 58,
+        "x_min": 4,
+        "x_max": 60
+      },
+      "volume_mm3": 15290.21,
+      "malignancy_score": 0.92,
+      "calcification_pattern": "Non-calcified (Soft Tissue Attenuation)",
+      "spiculation_score": 0.88,
+      "lobulation_score": 0.74
+    }
+  ],
+  "slice_abnormality_scores": [
+    0.0,
+    0.9926000237464905,
+    0.9948999881744385,
+    0.9904000163078308,
+    0.9912999868392944,
+    0.9941999912261963,
+    0.9921000003814697,
+    0.9945999979972839,
+    0.9940999746322632,
+    0.9923999905586243,
+    0.9950000047683716,
+    0.9941999912261963,
+    0.9939000010490417,
+    0.987500011920929,
+    0.9955999851226807,
+    0.9934999942779541,
+    0.9941999912261963,
+    0.9955000281333923,
+    0.9955999851226807,
+    0.9922999739646912,
+    0.9950000047683716,
+    0.9912999868392944,
+    0.9933000206947327,
+    0.9940999746322632,
+    0.9941999912261963,
+    0.9958000183105469,
+    0.9926000237464905,
+    0.9962000250816345,
+    0.991100013256073,
+    1.0,
+    0.9930999875068665,
+    0.0
+  ],
+  "total_lung_volume_cm3": 3420.0,
+  "total_lesion_volume_mm3": 15290.21,
+  "lung_involvement_percentage": 0.4471,
+  "saliency_peak_voxels": [
+    [
+      1,
+      7,
+      29
+    ],
+    [
+      1,
+      7,
+      30
+    ],
+    [
+      1,
+      7,
+      31
+    ],
+    [
+      1,
+      7,
+      32
+    ],
+    [
+      1,
+      7,
+      33
+    ]
+  ],
+  "metadata": {
+    "processing_time_ms": 36.06,
+    "input_tensor_shape": [
+      1,
+      32,
+      64,
+      64
+    ],
+    "threshold_applied": 0.4
+  },
+  "_id": "dc0b130fcdb80cb3"
+}

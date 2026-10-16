@@ -21,13 +21,21 @@ class MongoManager:
     def connect(self):
         try:
             from pymongo import MongoClient
-            self.client = MongoClient(settings.MONGODB_URL, serverSelectionTimeoutMS=2000)
+            client = MongoClient(settings.MONGODB_URL, serverSelectionTimeoutMS=1500)
             # Verify connection
-            self.client.admin.command("ping")
+            client.admin.command('ping')
+            self.client = client
             self.db = self.client[settings.MONGODB_DATABASE]
             self.is_connected = True
             logger.info("Connected to MongoDB cluster at %s", settings.MONGODB_URL)
         except Exception as e:
+            if self.client:
+                try:
+                    self.client.close()
+                except Exception:
+                    pass
+            self.client = None
+            self.db = None
             self.is_connected = False
             logger.warning(
                 "MongoDB not reachable (%s). Utilizing file-backed NoSQL document store at %s",
@@ -121,3 +129,4 @@ mongo_manager = MongoManager()
 
 def get_mongo():
     return mongo_manager
+
