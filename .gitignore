@@ -29,6 +29,16 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+data/ct_scans/raw/**/*.nii.gz
+data/ct_scans/raw/**/*.nii
+data/ct_scans/raw/**/*.dcm
+data/ct_scans/preprocessed/**/*
+data/ct_scans/validation_ground_truth/**/*
+!data/ct_scans/**/.gitkeep
+!data/ct_scans/**/*.md
+!data/ct_scans/**/*.json
+!data/ct_scans/**/*.csv
+
 
 # Model Checkpoints (large files)
 models/checkpoints/*

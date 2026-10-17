@@ -1,0 +1,60 @@
+{
+  "project": "AI-Powered 3D Image Reconstruction and Disease Analysis",
+  "pipeline_member": "Mayuri Agrawal (Member 1)",
+  "scope": "CT Scan Data Collection, SimpleITK Preprocessing & 3D Reconstruction",
+  "curated_datasets": [
+    {
+      "id": "totalsegmentator_ct",
+      "name": "TotalSegmentator Multi-Organ CT Dataset (Zenodo)",
+      "recommended_for": "3D Multi-Organ Surface Mesh Reconstruction (Liver, Spleen, Kidneys, Spine, Aorta, Lungs)",
+      "format": "NIfTI (.nii.gz)",
+      "license": "CC-BY 4.0 (Open Clinical Research)",
+      "direct_url": "https://zenodo.org/records/10047292",
+      "sample_download_url": "https://zenodo.org/records/10047292/files/Totalsegmentator_dataset_v201.zip",
+      "v1_direct_doi": "https://doi.org/10.5281/zenodo.6802614",
+      "structures_annotated": 117,
+      "upload_target_folder": "data/ct_scans/raw/nifti/volumes/"
+    },
+    {
+      "id": "chaos_challenge_ct",
+      "name": "CHAOS Challenge - Abdominal CT with Liver & Multi-Organ Ground Truth",
+      "recommended_for": "DICOM Series Ingestion & SimpleITK ImageSeriesReader Study",
+      "format": "DICOM (.dcm slices) & NIfTI / PNG Ground Truth Masks",
+      "license": "Open Academic Challenge (CC-BY-NC)",
+      "zenodo_url": "https://zenodo.org/record/3362844",
+      "kaggle_url": "https://www.kaggle.com/datasets/sardorabdirayimov/chaos-dataset",
+      "structures_annotated": ["Liver", "Kidneys", "Spleen"],
+      "upload_target_folder": "data/ct_scans/raw/dicom/<patient_folder>/"
+    },
+    {
+      "id": "kaggle_chest_ct",
+      "name": "Chest CT-Scan Images Dataset (Kaggle)",
+      "recommended_for": "Fast Direct Upload / Pulmonary CT Analysis",
+      "format": "Volumetric Axial Slices / DICOM",
+      "license": "Public Domain (CC0)",
+      "kaggle_url": "https://www.kaggle.com/datasets/mohamedhanyyy/chest-ctscan-images",
+      "structures_annotated": ["Lungs", "Chest Wall", "Adenocarcinoma", "Large Cell Carcinoma"],
+      "upload_target_folder": "data/ct_scans/raw/nifti/ or data/ct_scans/raw/dicom/"
+    },
+    {
+      "id": "amos_multi_organ",
+      "name": "AMOS 2022: Large-Scale Abdominal Multi-Organ Benchmark",
+      "recommended_for": "Large Scale Clinical 3D Abdominal Organ Reconstruction (15 Organs)",
+      "format": "NIfTI (.nii.gz)",
+      "license": "Academic Research",
+      "zenodo_url": "https://zenodo.org/records/7262600",
+      "github_url": "https://github.com/HzFu/AMOS",
+      "structures_annotated": 15,
+      "upload_target_folder": "data/ct_scans/raw/nifti/volumes/"
+    },
+    {
+      "id": "medmnist3d_nodule",
+      "name": "MedMNIST3D (NoduleMNIST3D & OrganMNIST3D)",
+      "recommended_for": "Local 3D CNN Disease Classification & Fast Marching Cubes Prototyping",
+      "format": "NumPy (.npz)",
+      "local_path": "data/nodulemnist3d.npz and data/organmnist3d.npz",
+      "structures_annotated": ["Lung Nodules", "11 Abdominal Organs"],
+      "status": "ALREADY DOWNLOADED"
+    }
+  ]
+}
