@@ -1,0 +1,3 @@
+dataset_id,modality,format,file_path,num_slices,matrix_size,voxel_spacing_mm,hu_min,hu_max,hu_mean,has_gt_mask,status
+patient_001_abdominal_ct,CT,DICOM Series,raw\dicom\patient_001_abdominal_ct,64,128x128,0.80x0.80x2.50,-1000.0,894.0,-414.9,False,VALID
+ct_scan_sample_01,CT,NIfTI,raw\nifti\volumes\ct_scan_sample_01.nii.gz,64,128x128,0.80x0.80x2.50,-1000.0,894.1431274414062,-414.7,True,VALID
