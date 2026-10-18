@@ -72,3 +72,19 @@ htmlcov/
 # Environment variables
 .env
 .env.*
+backend/data/uploads/
+backend/data/processed/
+backend/data/mongo_store/
+backend/medvision.db
+test_medvision.db
+__pycache__/
+.venv/
+venv/
+backend/data/uploads/
+backend/data/processed/
+backend/data/mongo_store/
+backend/medvision.db
+test_medvision.db
+__pycache__/
+.venv/
+venv/

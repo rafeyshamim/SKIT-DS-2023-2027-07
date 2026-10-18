@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 def execute_scan_processing_task(scan_id: int):
-    """Background task to run 3D volumetric reconstruction and HU windowing pipeline."""
+    """Background task to execute 3D volumetric reconstruction and HU windowing pipeline."""
     from app.db.session import SessionLocal
     db = SessionLocal()
     mongo = get_mongo()
@@ -35,7 +35,7 @@ def execute_scan_processing_task(scan_id: int):
         scan.status = ScanStatusEnum.PROCESSING.value
         db.commit()
 
-        # Check if file is a zip archive
+        # Check if file is a zip archive and extract safely
         file_to_process = storage_service.extract_zip_if_needed(scan.file_path, scan.scan_uid)
 
         # Execute 3D pipeline
@@ -43,16 +43,17 @@ def execute_scan_processing_task(scan_id: int):
             file_to_process, scan.scan_uid
         )
 
-        # Update SQL record
+        # Update SQL record with dimensional and voxel parameters
         scan.processed_volume_path = processed_path
         scan.slice_count = metadata.get("slice_count", 32)
         scan.slice_thickness_mm = metadata.get("slice_thickness_mm", 1.25)
         pixel_spacing = metadata.get("pixel_spacing", [0.703, 0.703])
         scan.pixel_spacing_xy = f"{pixel_spacing[0]}x{pixel_spacing[1]}"
         scan.status = ScanStatusEnum.PROCESSED.value
+        scan.error_message = None
         db.commit()
 
-        # Update MongoDB DICOM metadata document
+        # Persist rich DICOM metadata document in MongoDB
         mongo_doc = {
             "scan_id": scan.id,
             "scan_uid": scan.scan_uid,
@@ -72,10 +73,15 @@ def execute_scan_processing_task(scan_id: int):
         logger.info(f"Scan ID {scan_id} successfully reconstructed and processed.")
 
     except Exception as e:
-        logger.error(f"Error processing scan {scan_id}: {e}")
-        scan.status = ScanStatusEnum.FAILED.value
-        scan.error_message = str(e)
-        db.commit()
+        logger.error(f"Error processing scan {scan_id}: {e}", exc_info=True)
+        try:
+            scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
+            if scan:
+                scan.status = ScanStatusEnum.FAILED.value
+                scan.error_message = str(e)
+                db.commit()
+        except Exception:
+            db.rollback()
     finally:
         db.close()
 
@@ -91,29 +97,35 @@ def upload_scan(
     db: Session = Depends(get_db)
 ):
     """
-    Receives multi-part file upload, verifies patient, stores raw binary in storage,
+    Receives multi-part file upload, verifies patient, stores raw binary safely,
     registers scan in PostgreSQL, and optionally triggers 3D reconstruction pipeline.
     """
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Patient ID {patient_id} not found.")
 
-    # Save file
-    scan_uid, file_path, file_size = storage_service.save_upload_file(file)
+    # Save file and calculate hash
+    scan_uid, file_path, file_size, file_hash = storage_service.save_upload_file(file)
 
-    scan = CTScan(
-        scan_uid=scan_uid,
-        patient_id=patient.id,
-        modality=modality,
-        anatomical_region=anatomical_region,
-        original_filename=file.filename or "unknown_scan.dcm",
-        file_path=file_path,
-        file_size_bytes=file_size,
-        status=ScanStatusEnum.UPLOADED.value
-    )
-    db.add(scan)
-    db.commit()
-    db.refresh(scan)
+    try:
+        scan = CTScan(
+            scan_uid=scan_uid,
+            patient_id=patient.id,
+            modality=modality,
+            anatomical_region=anatomical_region,
+            original_filename=file.filename or "unknown_scan.dcm",
+            file_path=file_path,
+            file_size_bytes=file_size,
+            status=ScanStatusEnum.UPLOADED.value
+        )
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+    except Exception as e:
+        db.rollback()
+        storage_service.delete_scan_files(file_path)
+        logger.error(f"Failed to record scan in database: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save scan record.")
 
     if auto_process:
         background_tasks.add_task(execute_scan_processing_task, scan.id)
@@ -193,6 +205,27 @@ def download_processed_volume(scan_id: int, db: Session = Depends(get_db)):
         filename=f"{scan.scan_uid}_volume.npy"
     )
 
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete CT Scan and Associated Files")
+def delete_scan(scan_id: int, db: Session = Depends(get_db)):
+    """Deletes a CT scan, removes its files from disk, and cascades associated database records."""
+    scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found.")
+
+    file_path = scan.file_path
+    processed_path = scan.processed_volume_path
+
+    try:
+        db.delete(scan)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete scan ID {scan_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete scan record.")
+
+    storage_service.delete_scan_files(file_path, processed_path)
+    logger.info(f"Deleted CT Scan ID {scan_id} and associated volume files.")
+    return None
 
 @router.get("/{scan_id}/slices/{slice_idx}", summary="Get 2D Slice Matrix for Interactive Scrubber")
 def get_scan_slice(

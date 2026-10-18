@@ -52,7 +52,7 @@ class ReportService:
                     nod_type = l.get("nodule_type", "Solid nodule")
                     lesion_details.append(
                         f"  - Nodule #{idx}: {nod_type} at voxel centroid (z={centroid.get('z')}, "
-                        f"y={centroid.get('y')}, x={centroid.get('x')}). Estimated 3D volume: {vol} mm³. "
+                        f"y={centroid.get('y')}, x={centroid.get('x')}). Estimated 3D volume: {vol:.2f} mm^3. "
                         f"Malignancy suspicion index: {score:.2f}."
                     )
                 lesions_text = "\n".join(lesion_details)

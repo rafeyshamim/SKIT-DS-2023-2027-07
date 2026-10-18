@@ -19,34 +19,48 @@ def create_patient(patient_in: PatientCreate, db: Session = Depends(get_db)):
     """
     Registers a new patient record with a unique Medical Record Number (MRN).
     """
-    existing = db.query(Patient).filter(Patient.medical_record_number == patient_in.medical_record_number).first()
+    clean_mrn = patient_in.medical_record_number.strip()
+    if not clean_mrn:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Medical Record Number (MRN) cannot be blank."
+        )
+
+    existing = db.query(Patient).filter(Patient.medical_record_number == clean_mrn).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Patient with MRN '{patient_in.medical_record_number}' already exists."
+            detail=f"Patient with MRN '{clean_mrn}' already exists."
         )
 
-    patient = Patient(
-        medical_record_number=patient_in.medical_record_number,
-        full_name=patient_in.full_name,
-        date_of_birth=patient_in.date_of_birth,
-        gender=patient_in.gender,
-        contact_email=patient_in.contact_email,
-        contact_phone=patient_in.contact_phone,
-        medical_history_notes=patient_in.medical_history_notes,
-    )
-    db.add(patient)
-    db.commit()
-    db.refresh(patient)
-    logger.info(f"Registered patient ID {patient.id} with MRN {patient.medical_record_number}")
-    return patient
+    try:
+        patient = Patient(
+            medical_record_number=clean_mrn,
+            full_name=patient_in.full_name.strip(),
+            date_of_birth=patient_in.date_of_birth,
+            gender=patient_in.gender,
+            contact_email=patient_in.contact_email,
+            contact_phone=patient_in.contact_phone,
+            medical_history_notes=patient_in.medical_history_notes,
+        )
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+        logger.info(f"Registered patient ID {patient.id} with MRN {patient.medical_record_number}")
+        return patient
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating patient: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create patient record.")
 
 
 @router.get("", response_model=PatientListResponse, summary="List All Patients")
 def list_patients(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-    search: Optional[str] = None,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    search: Optional[str] = Query(None, description="Search term matching name or MRN"),
     db: Session = Depends(get_db)
 ):
     """
@@ -54,7 +68,7 @@ def list_patients(
     """
     query = db.query(Patient)
     if search:
-        search_filter = f"%{search}%"
+        search_filter = f"%{search.strip()}%"
         query = query.filter(
             (Patient.full_name.ilike(search_filter)) | 
             (Patient.medical_record_number.ilike(search_filter))
@@ -75,7 +89,7 @@ def list_patients(
 def get_patient(patient_id: int, db: Session = Depends(get_db)):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Patient ID {patient_id} not found.")
     return patient
 
 
@@ -83,25 +97,38 @@ def get_patient(patient_id: int, db: Session = Depends(get_db)):
 def update_patient(patient_id: int, patient_update: PatientUpdate, db: Session = Depends(get_db)):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Patient ID {patient_id} not found.")
 
     update_data = patient_update.model_dump(exclude_unset=True)
-    for field, val in update_data.items():
-        setattr(patient, field, val)
+    if "full_name" in update_data and update_data["full_name"]:
+        update_data["full_name"] = update_data["full_name"].strip()
 
-    db.commit()
-    db.refresh(patient)
-    logger.info(f"Updated patient ID {patient.id}")
-    return patient
+    try:
+        for field, val in update_data.items():
+            setattr(patient, field, val)
+
+        db.commit()
+        db.refresh(patient)
+        logger.info(f"Updated patient ID {patient.id}")
+        return patient
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating patient ID {patient_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update patient record.")
 
 
 @router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Patient Record")
 def delete_patient(patient_id: int, db: Session = Depends(get_db)):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Patient ID {patient_id} not found.")
 
-    db.delete(patient)
-    db.commit()
-    logger.info(f"Deleted patient ID {patient_id}")
-    return None
+    try:
+        db.delete(patient)
+        db.commit()
+        logger.info(f"Deleted patient ID {patient_id}")
+        return None
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting patient ID {patient_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete patient record.")

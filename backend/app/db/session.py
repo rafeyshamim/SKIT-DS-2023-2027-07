@@ -22,10 +22,13 @@ Base = declarative_base()
 
 
 def get_db():
-    """FastAPI Dependency for database session management."""
+    """FastAPI Dependency for database session management with automatic rollback on error."""
     db: Session = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

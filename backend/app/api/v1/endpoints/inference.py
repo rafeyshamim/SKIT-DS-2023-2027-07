@@ -1,5 +1,4 @@
 import os
-import datetime
 import numpy as np
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -18,6 +17,7 @@ from app.services.dicom_processor import dicom_processor
 from app.services.storage_service import storage_service
 from app.core.config import settings
 from app.core.logging import logger
+from app.core.utils import get_utc_now
 
 router = APIRouter()
 
@@ -29,7 +29,7 @@ def predict_scan(
     db: Session = Depends(get_db)
 ):
     """
-    Executes 3D CNN inference on a volumetric CT scan:
+    Executes 3D CNN volumetric inference:
     1. Validates scan existence and verifies 3D volume preprocessing.
     2. Records an InferenceRun in PostgreSQL (relational audit trail).
     3. Runs 3D CNN forward pass, computing class probabilities and 3D nodule localization.
@@ -38,7 +38,7 @@ def predict_scan(
     """
     scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
     if not scan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"CT Scan ID {scan_id} not found.")
 
     # Ensure volume is preprocessed
     if not scan.processed_volume_path or not os.path.exists(scan.processed_volume_path):
@@ -56,7 +56,7 @@ def predict_scan(
         model_name=settings.MODEL_NAME,
         model_version=settings.MODEL_VERSION,
         status=InferenceStatusEnum.RUNNING.value,
-        started_at=datetime.datetime.utcnow()
+        started_at=get_utc_now()
     )
     db.add(run)
     db.commit()
@@ -82,7 +82,7 @@ def predict_scan(
         run.risk_level = risk_level
         run.processing_time_ms = duration_ms
         run.mongo_payload_id = mongo_id
-        run.completed_at = datetime.datetime.utcnow()
+        run.completed_at = get_utc_now()
         db.commit()
         db.refresh(run)
 
@@ -111,10 +111,14 @@ def predict_scan(
         }
 
     except Exception as e:
-        logger.error(f"Inference execution failed for scan {scan_id}: {e}")
-        run.status = InferenceStatusEnum.FAILED.value
-        run.error_message = str(e)
-        db.commit()
+        logger.error(f"Inference execution failed for scan {scan_id}: {e}", exc_info=True)
+        try:
+            run.status = InferenceStatusEnum.FAILED.value
+            run.error_message = str(e)
+            run.completed_at = get_utc_now()
+            db.commit()
+        except Exception:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"3D CNN Inference failed: {str(e)}"
@@ -125,13 +129,12 @@ def predict_scan(
 def get_inference_run(inference_run_id: int, db: Session = Depends(get_db)):
     run = db.query(InferenceRun).filter(InferenceRun.id == inference_run_id).first()
     if not run:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inference run not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Inference run ID {inference_run_id} not found.")
 
     scan = run.scan
     mongo = get_mongo()
     mongo_doc = mongo.get_document("inference_payloads", run.mongo_payload_id) if run.mongo_payload_id else {}
     if not mongo_doc:
-        # Check by query
         docs = mongo.query_documents("inference_payloads", {"inference_run_id": run.id})
         mongo_doc = docs[0] if docs else {}
 
@@ -172,9 +175,22 @@ def get_latest_inference_for_scan(scan_id: int, db: Session = Depends(get_db)):
     ).order_by(InferenceRun.id.desc()).first()
 
     if not run:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No completed inference found for this scan.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No completed inference found for CT Scan ID {scan_id}.")
 
     return get_inference_run(run.id, db)
+
+
+@router.get("/scans/{scan_id}/runs", response_model=List[InferenceResultResponse], summary="List All Inference Runs for Scan")
+def list_inference_runs_for_scan(scan_id: int, db: Session = Depends(get_db)):
+    """Retrieves all historical inference runs conducted on a CT scan."""
+    runs = db.query(InferenceRun).filter(InferenceRun.scan_id == scan_id).order_by(InferenceRun.id.desc()).all()
+    results = []
+    for r in runs:
+        try:
+            results.append(get_inference_run(r.id, db))
+        except Exception:
+            pass
+    return results
 
 
 @router.get("/scans/{scan_id}/slice-heatmap/{slice_idx}", response_model=HeatmapSliceResponse, summary="Get Axial Slice Heatmap & Coordinates")
@@ -201,7 +217,10 @@ def get_slice_heatmap(scan_id: int, slice_idx: int, db: Session = Depends(get_db
     total_slices = len(slice_scores) if slice_scores else 32
 
     if slice_idx < 0 or slice_idx >= total_slices:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Slice index must be between 0 and {total_slices - 1}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Slice index must be between 0 and {total_slices - 1}"
+        )
 
     abnormality_score = slice_scores[slice_idx] if slice_idx < len(slice_scores) else 0.0
 

@@ -1,8 +1,8 @@
-import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Text
 from sqlalchemy.orm import relationship
 import enum
 from app.db.session import Base
+from app.core.utils import get_utc_now
 
 
 class GenderEnum(str, enum.Enum):
@@ -22,8 +22,8 @@ class Patient(Base):
     contact_email = Column(String(128), nullable=True)
     contact_phone = Column(String(32), nullable=True)
     medical_history_notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+    updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now, nullable=False)
 
     # Relationships
     scans = relationship("CTScan", back_populates="patient", cascade="all, delete-orphan")

@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from fastapi.testclient import TestClient
 from app.main import app
 
+
 def run_pipeline_demo():
     print("=" * 75)
     print("      MEDVISION 3D CT DIAGNOSTIC PIPELINE DEMO & BENCHMARK")
@@ -85,7 +86,7 @@ def run_pipeline_demo():
             print(f"     * Lesion {idx}: {lesion['nodule_type']}")
             print(f"       Voxel Centroid : (z={centroid['z']}, y={centroid['y']}, x={centroid['x']})")
             print(f"       3D Bounding Box: z:[{bbox['z_min']},{bbox['z_max']}], y:[{bbox['y_min']},{bbox['y_max']}], x:[{bbox['x_min']},{bbox['x_max']}]")
-            print(f"       Volume (mm3)   : {lesion['volume_mm3']} mm³")
+            print(f"       Volume (mm3)   : {lesion['volume_mm3']:.2f} mm^3")
             print(f"       Malignancy Ind.: {lesion['malignancy_score']:.2f}")
 
         # 5. Generate Clinical Diagnostic Report
@@ -112,6 +113,7 @@ def run_pipeline_demo():
         print("=" * 75)
         print("PIPELINE EXECUTION COMPLETE & ALL INTEGRATION CHECKS PASSED!")
         print("=" * 75)
+
 
 if __name__ == "__main__":
     run_pipeline_demo()

@@ -47,9 +47,23 @@ def test_3d_cnn_inference_pipeline(client):
     assert get_run_res.status_code == 200
     assert get_run_res.json()["primary_prediction"] == inf_data["primary_prediction"]
 
-    # 5. Fetch axial slice heatmap overlay
+    # 5. Fetch latest inference for scan
+    latest_res = client.get(f"/api/v1/inference/scans/{scan_id}/latest")
+    assert latest_res.status_code == 200
+    assert latest_res.json()["id"] == run_id
+
+    # 6. List all runs for scan
+    runs_res = client.get(f"/api/v1/inference/scans/{scan_id}/runs")
+    assert runs_res.status_code == 200
+    assert len(runs_res.json()) >= 1
+
+    # 7. Fetch axial slice heatmap overlay
     slice_heatmap_res = client.get(f"/api/v1/inference/scans/{scan_id}/slice-heatmap/16")
     assert slice_heatmap_res.status_code == 200
     slice_data = slice_heatmap_res.json()
     assert slice_data["slice_index"] == 16
     assert len(slice_data["normalized_heatmap_grid"]) == 16
+
+    # 8. Out of bounds slice index check
+    invalid_slice_res = client.get(f"/api/v1/inference/scans/{scan_id}/slice-heatmap/999")
+    assert invalid_slice_res.status_code == 400

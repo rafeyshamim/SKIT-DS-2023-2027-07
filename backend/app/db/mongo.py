@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List
 from app.core.config import settings
 from app.core.logging import logger
 
+
 class MongoManager:
     """
     Manages MongoDB connections for unstructured/semi-structured DICOM metadata,
@@ -47,7 +48,7 @@ class MongoManager:
             self.is_connected = False
 
     def insert_document(self, collection_name: str, doc: Dict[str, Any]) -> str:
-        """Inserts a document into collection or local document store."""
+        """Inserts or updates a document in collection or local document store."""
         doc_id = str(doc.get("_id") or doc.get("id") or os.urandom(8).hex())
         doc["_id"] = doc_id
 
@@ -103,9 +104,29 @@ class MongoManager:
                             results.append(data)
         return results
 
+    def delete_document(self, collection_name: str, doc_id: str) -> bool:
+        """Deletes a document by _id."""
+        deleted = False
+        if self.is_connected and self.db is not None:
+            try:
+                res = self.db[collection_name].delete_one({"_id": doc_id})
+                deleted = res.deleted_count > 0
+            except Exception as e:
+                logger.error("Failed to delete from MongoDB: %s", e)
+
+        file_path = os.path.join(self._fallback_store_dir, collection_name, f"{doc_id}.json")
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                deleted = True
+            except OSError:
+                pass
+        return deleted
+
 
 mongo_manager = MongoManager()
 
 
 def get_mongo():
     return mongo_manager
+
