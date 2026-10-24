@@ -1,5 +1,7 @@
 """SQLAlchemy model for clinical radiological diagnostic reports."""
 
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy.orm import relationship
 import enum
 from typing import Any, Dict, Optional
 from sqlalchemy import (
@@ -91,6 +93,8 @@ class Report(Base):
         index=True,
     )
 
+    
+    status = Column(String(32), default=ReportStatusEnum.FINALIZED.value, nullable=False)
     created_at = Column(DateTime, default=get_utc_now, nullable=False)
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now, nullable=False)
 

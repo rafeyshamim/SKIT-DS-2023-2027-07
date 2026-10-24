@@ -1,6 +1,10 @@
 """SQLAlchemy model for AI inference runs executed against CT scans."""
-
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Float
+from sqlalchemy.orm import relationship
 import enum
+from app.db.session import Base
+from app.core.utils import get_utc_now
+
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -114,6 +118,9 @@ class InferenceRun(Base):
     created_at = Column(DateTime(timezone=True), default=get_utc_now, nullable=False)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    started_at = Column(DateTime, default=get_utc_now, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
 
     # Relationships
     scan = relationship("CTScan", back_populates="inference_runs")
