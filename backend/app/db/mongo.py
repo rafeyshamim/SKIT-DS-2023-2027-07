@@ -1,3 +1,15 @@
+"""MongoDB NoSQL Database Manager.
+
+Manages MongoDB connections for unstructured and semi-structured payloads:
+- DICOM volumetric header metadata
+- 3D nodule bounding boxes and spatial centroids
+- Multi-slice axial abnormality heatmaps
+- Volumetric tissue quantification metrics
+
+Includes a transparent fallback to a local JSON document store
+when the MongoDB service is unreachable (e.g. during standalone testing).
+"""
+
 import os
 import json
 from typing import Dict, Any, Optional, List
@@ -6,11 +18,8 @@ from app.core.logging import logger
 
 
 class MongoManager:
-    """
-    Manages MongoDB connections for unstructured/semi-structured DICOM metadata,
-    3D volumetric coordinate sets, slice-level heatmaps, and inference output documents.
-    Provides graceful fallback to local JSON document store when MongoDB service is offline.
-    """
+    """Manages MongoDB connections and provides a fallback file-backed document store."""
+
     def __init__(self):
         self.client = None
         self.db = None
@@ -18,16 +27,22 @@ class MongoManager:
         self._fallback_store_dir = os.path.join(settings.BASE_DIR, "data", "mongo_store")
         os.makedirs(self._fallback_store_dir, exist_ok=True)
 
-    def connect(self):
+    def connect(self) -> None:
+        """Connects to the MongoDB cluster and verifies ping status."""
         try:
             from pymongo import MongoClient
-            client = MongoClient(settings.MONGODB_URL, serverSelectionTimeoutMS=1500)
-            # Verify connection
-            client.admin.command('ping')
+            client = MongoClient(
+                settings.MONGODB_URL,
+                serverSelectionTimeoutMS=1500,
+                connectTimeoutMS=1500,
+            )
+            # Verify connectivity
+            client.admin.command("ping")
             self.client = client
             self.db = self.client[settings.MONGODB_DATABASE]
             self.is_connected = True
             logger.info("Connected to MongoDB cluster at %s", settings.MONGODB_URL)
+            self._ensure_indexes()
         except Exception as e:
             if self.client:
                 try:
@@ -42,13 +57,28 @@ class MongoManager:
                 e, self._fallback_store_dir
             )
 
-    def close(self):
+    def _ensure_indexes(self) -> None:
+        """Ensures query performance indices exist on primary collections."""
+        if not self.is_connected or self.db is None:
+            return
+        try:
+            self.db["inference_payloads"].create_index("inference_run_id")
+            self.db["inference_payloads"].create_index("scan_id")
+            self.db["dicom_metadata"].create_index("scan_id")
+            self.db["dicom_metadata"].create_index("scan_uid")
+            logger.info("MongoDB collection indices verified.")
+        except Exception as err:
+            logger.warning("Could not initialize MongoDB indices: %s", err)
+
+    def close(self) -> None:
+        """Closes the MongoDB connection client."""
         if self.client:
             self.client.close()
             self.is_connected = False
+            logger.info("Closed MongoDB client connection.")
 
     def insert_document(self, collection_name: str, doc: Dict[str, Any]) -> str:
-        """Inserts or updates a document in collection or local document store."""
+        """Inserts or upserts a document into the specified collection or local store."""
         doc_id = str(doc.get("_id") or doc.get("id") or os.urandom(8).hex())
         doc["_id"] = doc_id
 
@@ -68,7 +98,7 @@ class MongoManager:
         return doc_id
 
     def get_document(self, collection_name: str, doc_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieves a document by _id from collection or local document store."""
+        """Retrieves a document by _id from collection or fallback local store."""
         if self.is_connected and self.db is not None:
             try:
                 doc = self.db[collection_name].find_one({"_id": doc_id})
@@ -84,14 +114,14 @@ class MongoManager:
         return None
 
     def query_documents(self, collection_name: str, query_filter: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Queries documents matching filter."""
+        """Queries documents matching a dictionary filter."""
         if self.is_connected and self.db is not None:
             try:
                 return list(self.db[collection_name].find(query_filter))
             except Exception as e:
                 logger.error("Failed to query MongoDB: %s", e)
 
-        # Fallback simple search
+        # Fallback directory search
         results = []
         col_dir = os.path.join(self._fallback_store_dir, collection_name)
         if os.path.exists(col_dir):
@@ -127,6 +157,6 @@ class MongoManager:
 mongo_manager = MongoManager()
 
 
-def get_mongo():
+def get_mongo() -> MongoManager:
+    """Dependency / accessor returning the global MongoManager instance."""
     return mongo_manager
-
