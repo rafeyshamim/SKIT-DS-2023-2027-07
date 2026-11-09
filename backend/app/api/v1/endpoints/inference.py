@@ -1,8 +1,19 @@
+"""API Endpoints for 3D CNN Model Inference and Volumetric Prediction Results.
+
+Provides endpoints to:
+- Trigger 3D CNN forward inference on preprocessed volumetric scans
+- Persist prediction results, confidence scores, and risk classifications to PostgreSQL
+- Persist rich 3D bounding box coordinates and slice attention maps to MongoDB
+- Query latest or historical inference runs by scan ID
+- Retrieve per-slice Grad-CAM abnormality heatmap matrices for interactive PACs viewers
+"""
+
 import os
 import numpy as np
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.db.session import get_db
 from app.db.mongo import get_mongo
 from app.models.sql.scan import CTScan, ScanStatusEnum
@@ -10,7 +21,8 @@ from app.models.sql.inference import InferenceRun, InferenceStatusEnum, RiskLeve
 from app.schemas.inference import (
     InferenceTriggerRequest,
     InferenceResultResponse,
-    HeatmapSliceResponse
+    InferenceRunSummaryResponse,
+    HeatmapSliceResponse,
 )
 from app.services.model_service import model_service
 from app.services.dicom_processor import dicom_processor
@@ -50,7 +62,7 @@ def predict_scan(
         scan.status = ScanStatusEnum.PROCESSED.value
         db.commit()
 
-    # Create InferenceRun row in PostgreSQL
+    # Create and record pending InferenceRun in PostgreSQL
     run = InferenceRun(
         scan_id=scan.id,
         model_name=settings.MODEL_NAME,
@@ -75,14 +87,14 @@ def predict_scan(
         mongo = get_mongo()
         mongo_id = mongo.insert_document("inference_payloads", payload_doc.model_dump())
 
-        # Update SQL record with inference results
-        run.status = InferenceStatusEnum.COMPLETED.value
-        run.primary_prediction = primary_pred
-        run.confidence_score = confidence
-        run.risk_level = risk_level
-        run.processing_time_ms = duration_ms
-        run.mongo_payload_id = mongo_id
-        run.completed_at = get_utc_now()
+        # Update SQL record with completed inference deliverables
+        run.mark_completed(
+            prediction=primary_pred,
+            confidence=confidence,
+            risk_level=risk_level,
+            mongo_payload_id=mongo_id,
+            duration_ms=duration_ms,
+        )
         db.commit()
         db.refresh(run)
 
@@ -92,10 +104,10 @@ def predict_scan(
             "patient_id": scan.patient_id,
             "model_name": run.model_name,
             "model_version": run.model_version,
-            "status": run.status,
+            "status": run.status.value if isinstance(run.status, InferenceStatusEnum) else str(run.status),
             "primary_prediction": run.primary_prediction,
             "confidence_score": run.confidence_score,
-            "risk_level": run.risk_level,
+            "risk_level": run.risk_level.value if isinstance(run.risk_level, RiskLevelEnum) else str(run.risk_level),
             "processing_time_ms": run.processing_time_ms,
             "class_probabilities": payload_doc.class_probabilities,
             "lesions_detected_count": len(payload_doc.lesion_detections),
@@ -113,9 +125,7 @@ def predict_scan(
     except Exception as e:
         logger.error(f"Inference execution failed for scan {scan_id}: {e}", exc_info=True)
         try:
-            run.status = InferenceStatusEnum.FAILED.value
-            run.error_message = str(e)
-            run.completed_at = get_utc_now()
+            run.mark_failed(str(e))
             db.commit()
         except Exception:
             db.rollback()
@@ -127,11 +137,14 @@ def predict_scan(
 
 @router.get("/runs/{inference_run_id}", response_model=InferenceResultResponse, summary="Get Inference Run Result")
 def get_inference_run(inference_run_id: int, db: Session = Depends(get_db)):
+    """Retrieves structured prediction result, confidence score, and 3D MongoDB payload by Run ID."""
     run = db.query(InferenceRun).filter(InferenceRun.id == inference_run_id).first()
     if not run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Inference run ID {inference_run_id} not found.")
 
     scan = run.scan
+    patient_id = scan.patient_id if scan else 0
+
     mongo = get_mongo()
     mongo_doc = mongo.get_document("inference_payloads", run.mongo_payload_id) if run.mongo_payload_id else {}
     if not mongo_doc:
@@ -142,16 +155,19 @@ def get_inference_run(inference_run_id: int, db: Session = Depends(get_db)):
     probs = mongo_doc.get("class_probabilities", {})
     slice_scores = mongo_doc.get("slice_abnormality_scores", [])
 
+    status_val = run.status.value if isinstance(run.status, InferenceStatusEnum) else str(run.status)
+    risk_val = run.risk_level.value if isinstance(run.risk_level, RiskLevelEnum) else str(run.risk_level) if run.risk_level else None
+
     return {
         "id": run.id,
         "scan_id": run.scan_id,
-        "patient_id": scan.patient_id,
+        "patient_id": patient_id,
         "model_name": run.model_name,
         "model_version": run.model_version,
-        "status": run.status,
+        "status": status_val,
         "primary_prediction": run.primary_prediction,
         "confidence_score": run.confidence_score,
-        "risk_level": run.risk_level,
+        "risk_level": risk_val,
         "processing_time_ms": run.processing_time_ms,
         "class_probabilities": probs,
         "lesions_detected_count": len(lesions),
@@ -169,6 +185,7 @@ def get_inference_run(inference_run_id: int, db: Session = Depends(get_db)):
 
 @router.get("/scans/{scan_id}/latest", response_model=InferenceResultResponse, summary="Get Latest Inference for Scan")
 def get_latest_inference_for_scan(scan_id: int, db: Session = Depends(get_db)):
+    """Fetches the most recently completed 3D inference run for a given CT Scan."""
     run = db.query(InferenceRun).filter(
         InferenceRun.scan_id == scan_id,
         InferenceRun.status == InferenceStatusEnum.COMPLETED.value
@@ -188,8 +205,8 @@ def list_inference_runs_for_scan(scan_id: int, db: Session = Depends(get_db)):
     for r in runs:
         try:
             results.append(get_inference_run(r.id, db))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not load inference run {r.id}: {e}")
     return results
 
 
@@ -214,7 +231,7 @@ def get_slice_heatmap(scan_id: int, slice_idx: int, db: Session = Depends(get_db
     mongo = get_mongo()
     doc = mongo.get_document("inference_payloads", latest_run.mongo_payload_id) or {}
     slice_scores = doc.get("slice_abnormality_scores", [])
-    total_slices = len(slice_scores) if slice_scores else 32
+    total_slices = len(slice_scores) if slice_scores else (scan.slice_count or 32)
 
     if slice_idx < 0 or slice_idx >= total_slices:
         raise HTTPException(
@@ -232,7 +249,7 @@ def get_slice_heatmap(scan_id: int, slice_idx: int, db: Session = Depends(get_db
             lesions_on_slice.append(lesion)
 
     # 16x16 normalized grid representation for fast frontend rendering
-    grid = [[round(abnormality_score * np.exp(-((r - 8)**2 + (c - 8)**2) / 18.0), 3) for c in range(16)] for r in range(16)]
+    grid = [[round(abnormality_score * float(np.exp(-((r - 8)**2 + (c - 8)**2) / 18.0)), 3) for c in range(16)] for r in range(16)]
 
     return {
         "scan_id": scan_id,
