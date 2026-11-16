@@ -1,14 +1,18 @@
 import { useRef, useState } from "react";
-import ModelViewer from "./ModelViewer.jsx";
+import ModelViewer, { getParts } from "./ModelViewer.jsx";
 
 export default function ViewerPage({ scan, onUploadAnother, onResults }) {
   const viewer = useRef(null);
-  const hasModel = !!scan.mesh;
+  const parts = getParts(scan.mesh);
+  const hasModel = parts.length > 0;
   const [opacity, setOpacity] = useState(0.85);
   const [autoRotate, setAutoRotate] = useState(true);
   const [wireframe, setWireframe] = useState(false);
-  const [showModel, setShowModel] = useState(true);
+  const [layers, setLayers] = useState({});
   const [view, setView] = useState("front");
+
+  const toggleLayer = (name) =>
+    setLayers((l) => ({ ...l, [name]: l[name] === false }));
 
   const changeView = (v) => {
     setView(v);
@@ -59,7 +63,7 @@ export default function ViewerPage({ scan, onUploadAnother, onResults }) {
             opacity={opacity}
             autoRotate={autoRotate}
             wireframe={wireframe}
-            showModel={showModel}
+            layers={layers}
           />
 
           {!hasModel && (
@@ -131,12 +135,29 @@ export default function ViewerPage({ scan, onUploadAnother, onResults }) {
           <h3 className="card-title">Layers</h3>
           {hasModel ? (
             <ul className="layers">
-              <li>
-                <span>Reconstructed model</span>
-                <button className={`toggle ${showModel ? "toggle-on" : ""}`} onClick={() => setShowModel((v) => !v)}>
-                  {showModel ? "Shown" : "Hidden"}
-                </button>
-              </li>
+              {parts.map((p) => {
+                const on = layers[p.name] !== false;
+                return (
+                  <li key={p.name}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: "50%",
+                          background: p.color,
+                          display: "inline-block",
+                        }}
+                      />
+                      {p.name}
+                    </span>
+                    <button className={`toggle ${on ? "toggle-on" : ""}`} onClick={() => toggleLayer(p.name)}>
+                      {on ? "Shown" : "Hidden"}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="muted small">No layers yet. They appear once a 3D model is available.</p>
