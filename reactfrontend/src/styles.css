@@ -182,3 +182,44 @@ h3.card-title { font-size: 16px; margin-bottom: 12px; }
 .empty-block { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 70px 20px 60px; margin-top: 18px; border: 1.5px dashed #cfdcd9; border-radius: 16px; background: #fafcfb; color: var(--muted); }
 .empty-block strong { color: var(--ink); font-size: 17px; }
 .empty-block .empty-icon { background: var(--green-soft); color: var(--green); }
+
+
+
+
+
+
+/* ---- Layers panel: more breathing room ---- */
+.side .layers {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side .layers li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid #e3ecea;
+  font-size: 14px;
+}
+
+.side .layers li:first-child {
+  padding-top: 4px;
+}
+
+.side .layers li:last-child {
+  padding-bottom: 4px;
+  border-bottom: 0;
+}
+
+.side .layers .toggle {
+  min-width: 78px;
+  padding: 7px 14px;
+  line-height: 1.2;
+  font-size: 13px;
+  text-align: center;
+}

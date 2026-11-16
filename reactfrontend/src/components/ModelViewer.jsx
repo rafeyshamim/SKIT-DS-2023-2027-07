@@ -2,25 +2,64 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-// Empty 3D stage (dark scene + grid). When the backend returns a mesh
-// ({ vertices: number[][], faces: number[][] }) it is rendered here.
+// 3D stage (dark scene + grid). Accepts either
+//   { vertices, faces }                         -> one model
+//   { parts: [{ name, color, solid, vertices, faces }] } -> several layers
 
-function buildFromMesh(m) {
+const LEGACY_PART = { name: "Reconstructed model", color: "#d98a86", solid: false };
+
+export function getParts(mesh) {
+  if (!mesh) return [];
+  if (Array.isArray(mesh.parts)) return mesh.parts;
+  if (mesh.vertices && mesh.faces) {
+    return [{ ...LEGACY_PART, vertices: mesh.vertices, faces: mesh.faces }];
+  }
+  return [];
+}
+
+function getBounds(parts) {
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  parts.forEach((p) => p.vertices.forEach((q) => box.expandByPoint(v.set(q[0], q[1], q[2]))));
+  return box;
+}
+
+function buildGeometry(part, center, k) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(m.vertices.flat(), 3));
-  g.setIndex(m.faces.flat());
-  g.computeBoundingBox();
-  const c = g.boundingBox.getCenter(new THREE.Vector3());
-  const sz = g.boundingBox.getSize(new THREE.Vector3());
-  g.translate(-c.x, -c.y, -c.z);
-  const k = 4.2 / Math.max(sz.x, sz.y, sz.z);
-  g.scale(k, k, k);
+  const pos = new Float32Array(part.vertices.length * 3);
+  part.vertices.forEach((q, i) => {
+    pos[i * 3] = (q[0] - center.x) * k;
+    pos[i * 3 + 1] = (q[1] - center.y) * k;
+    pos[i * 3 + 2] = (q[2] - center.z) * k;
+  });
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setIndex(part.faces.flat());
   g.computeVertexNormals();
   return g;
 }
 
+function buildMaterial(part) {
+  if (part.solid) {
+    return new THREE.MeshStandardMaterial({
+      color: part.color,
+      roughness: 0.5,
+      emissive: "#6b4a3a",
+      emissiveIntensity: 0.35,
+      side: THREE.DoubleSide,
+    });
+  }
+  return new THREE.MeshPhysicalMaterial({
+    color: part.color,
+    roughness: 0.55,
+    clearcoat: 0.35,
+    clearcoatRoughness: 0.4,
+    transparent: true,
+    opacity: 0.85,
+  });
+}
+
 const ModelViewer = forwardRef(function ModelViewer(
-  { mesh, opacity, autoRotate, wireframe, showModel },
+  { mesh, opacity, autoRotate, wireframe, layers },
   ref
 ) {
   const mountRef = useRef(null);
@@ -67,29 +106,30 @@ const ModelViewer = forwardRef(function ModelViewer(
     renderer.setSize(w, h);
     mount.appendChild(renderer.domElement);
 
-    scene.add(new THREE.HemisphereLight("#ffffff", "#22343b", 1.1));
-    const key = new THREE.DirectionalLight("#ffffff", 1.2);
-    key.position.set(4, 6, 6);
+    scene.add(new THREE.HemisphereLight("#ffffff", "#22343b", 0.95));
+    const key = new THREE.DirectionalLight("#ffffff", 1.1);
+    key.position.set(4, 6, 7);
     scene.add(key);
+    const rim = new THREE.DirectionalLight("#6fd0c4", 0.7);
+    rim.position.set(-6, 3, -6);
+    scene.add(rim);
 
     const grid = new THREE.GridHelper(24, 48, "#1f5a55", "#16313a");
     grid.position.y = -2.6;
     scene.add(grid);
 
-    let model = null;
-    if (mesh?.vertices && mesh?.faces) {
-      model = new THREE.Mesh(
-        buildFromMesh(mesh),
-        new THREE.MeshPhysicalMaterial({
-          color: "#d98a86",
-          roughness: 0.5,
-          clearcoat: 0.3,
-          transparent: true,
-          opacity: 0.85,
-          side: THREE.DoubleSide,
-        })
-      );
-      scene.add(model);
+    const parts = getParts(mesh);
+    const built = [];
+    if (parts.length) {
+      const box = getBounds(parts);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const k = 4.2 / Math.max(size.x, size.y, size.z);
+      parts.forEach((p) => {
+        const m = new THREE.Mesh(buildGeometry(p, center, k), buildMaterial(p));
+        scene.add(m);
+        built.push({ name: p.name, mesh: m, solid: !!p.solid });
+      });
     }
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -98,7 +138,7 @@ const ModelViewer = forwardRef(function ModelViewer(
     controls.maxDistance = 16;
     controls.autoRotateSpeed = 1.6;
 
-    st.current = { scene, camera, renderer, controls, model };
+    st.current = { scene, camera, renderer, controls, parts: built };
     setView("front");
 
     let raf;
@@ -136,13 +176,16 @@ const ModelViewer = forwardRef(function ModelViewer(
   useEffect(() => {
     const s = st.current;
     if (!s.scene) return;
-    if (s.model) {
-      s.model.material.opacity = opacity;
-      s.model.material.wireframe = wireframe;
-      s.model.visible = showModel;
-    }
-    s.controls.autoRotate = autoRotate && !!s.model;
-  }, [mesh, opacity, autoRotate, wireframe, showModel]);
+    const list = s.parts || [];
+    list.forEach(({ name, mesh: m, solid }) => {
+      if (!solid) {
+        m.material.opacity = opacity;
+        m.material.wireframe = wireframe;
+      }
+      m.visible = layers?.[name] !== false;
+    });
+    s.controls.autoRotate = autoRotate && list.length > 0;
+  }, [mesh, opacity, autoRotate, wireframe, layers]);
 
   return <div className="viewport" ref={mountRef} />;
 });
