@@ -44,6 +44,8 @@ def cmd_train(args):
     from src.model.trainer import ModelTrainer
     
     config = load_config(args.config)
+    if args.epochs is not None:
+        config["training"]["epochs"] = args.epochs
     pipeline = PreprocessingPipeline(config)
     splits = pipeline.load_and_prepare_data()
 
@@ -305,6 +307,7 @@ def main():
 
     # Subcommand: train
     p_train = subparsers.add_parser("train", help="Train 3D CNN model")
+    p_train.add_argument("--epochs", type=int, default=None, help="Override configured training epoch count")
 
     # Subcommand: evaluate
     p_eval = subparsers.add_parser("evaluate", help="Evaluate model performance")
