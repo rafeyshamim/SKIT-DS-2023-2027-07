@@ -5,7 +5,7 @@ and the get_db FastAPI dependency with automatic transaction rollbacks.
 """
 
 from typing import Generator
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from app.core.config import settings
 from app.core.logging import logger
@@ -54,6 +54,29 @@ def init_db() -> None:
     """Initializes relational database schema tables."""
     try:
         Base.metadata.create_all(bind=engine)
+
+        # ``create_all`` creates missing tables but does not add columns to
+        # existing SQLite tables. Older local databases predate this audit
+        # timestamp, which the current InferenceRun model selects on every
+        # query. Add it in place and backfill existing runs without dropping
+        # or replacing any scan or inference data.
+        if engine.dialect.name == "sqlite":
+            columns = {
+                column["name"]
+                for column in inspect(engine).get_columns("inference_runs")
+            }
+            if "created_at" not in columns:
+                with engine.begin() as connection:
+                    connection.exec_driver_sql(
+                        "ALTER TABLE inference_runs ADD COLUMN created_at DATETIME"
+                    )
+                    connection.exec_driver_sql(
+                        "UPDATE inference_runs "
+                        "SET created_at = COALESCE(started_at, CURRENT_TIMESTAMP) "
+                        "WHERE created_at IS NULL"
+                    )
+                logger.info("Migrated SQLite inference_runs.created_at column.")
+
         logger.info("Relational database schema initialized successfully.")
     except Exception as e:
         logger.error(f"Error initializing database schema: {e}")

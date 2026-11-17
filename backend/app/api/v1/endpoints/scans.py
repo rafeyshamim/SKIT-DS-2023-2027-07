@@ -347,7 +347,7 @@ def get_scan_isosurface_html(scan_id: int, db: Session = Depends(get_db)):
     html_path = os.path.join(output_dir, html_filename)
 
     if not os.path.exists(html_path):
-        from src.reconstruction.reconstructor import VolumeReconstructor
+        from reactfrontend.src.reconstruction import VolumeReconstructor
         vol = np.load(scan.processed_volume_path)
         if vol.ndim == 4:
             vol = vol[0]
@@ -372,7 +372,7 @@ def get_scan_mip(scan_id: int, db: Session = Depends(get_db)):
     mip_path = os.path.join(output_dir, mip_filename)
 
     if not os.path.exists(mip_path):
-        from src.reconstruction.reconstructor import VolumeReconstructor
+        from reactfrontend.src.reconstruction import VolumeReconstructor
         vol = np.load(scan.processed_volume_path)
         if vol.ndim == 4:
             vol = vol[0]

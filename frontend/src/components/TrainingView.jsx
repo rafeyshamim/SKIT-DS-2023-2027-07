@@ -2,14 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   Cpu, 
   Database, 
-  CheckCircle2, 
-  TrendingUp, 
-  Play, 
   RefreshCw, 
-  Layers, 
   Award,
   Zap,
-  BarChart3
+  BarChart3,
+  Clock3
 } from 'lucide-react';
 import { fetchTrainingStatus, triggerTraining } from '../api';
 
@@ -18,6 +15,7 @@ export default function TrainingView() {
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [selectedEpochs, setSelectedEpochs] = useState(5);
+  const [statusError, setStatusError] = useState('');
 
   useEffect(() => {
     loadStatus();
@@ -26,50 +24,68 @@ export default function TrainingView() {
   }, []);
 
   async function loadStatus() {
+    setLoading(true);
     try {
       const data = await fetchTrainingStatus();
       setTrainingStatus(data);
+      setStatusError('');
     } catch (err) {
-      console.warn('Could not fetch training status:', err);
+      setTrainingStatus(null);
+      setStatusError(err.message || 'Could not fetch training status.');
+    } finally {
+      setLoading(false);
     }
   }
 
   async function handleStartTraining() {
     setTriggering(true);
     try {
-      await triggerTraining(selectedEpochs);
+      const response = await triggerTraining(selectedEpochs);
+      if (response.status !== 'STARTED') throw new Error(response.message || 'Training did not start.');
       await loadStatus();
     } catch (err) {
-      console.error('Failed to trigger training:', err);
+      setStatusError(err.message || 'Failed to start training.');
     } finally {
       setTriggering(false);
     }
   }
 
   const history = trainingStatus?.checkpoint?.history;
-  const accuracyArr = history?.accuracy || [0.452, 0.598, 0.684, 0.745, 0.803];
-  const lossArr = history?.loss || [2.42, 1.85, 1.39, 1.12, 0.89];
+  const accuracyArr = history?.accuracy || [];
+  const lossArr = history?.loss || [];
   const maxAcc = accuracyArr.length > 0 ? Math.max(...accuracyArr) : 0;
-  const firstLoss = lossArr.length > 0 ? lossArr[0] : 0;
-  const lastLoss = lossArr.length > 0 ? lossArr[lossArr.length - 1] : 0;
+  const firstLoss = lossArr.length > 0 ? lossArr[0] : null;
+  const lastLoss = lossArr.length > 0 ? lossArr[lossArr.length - 1] : null;
+  const datasetLabel = trainingStatus?.dataset_name?.replace(/3d$/i, '3D').toUpperCase() || 'Dataset not configured';
+  const architecture = trainingStatus?.architecture || {};
+  const checkpoint = trainingStatus?.checkpoint;
+  const evaluation = trainingStatus?.evaluation_metrics;
+  const runHistory = [...(trainingStatus?.run_history || [])].reverse();
+  const splits = trainingStatus?.dataset_splits;
+  const formatMetric = (value, digits = 2) => value != null && Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(digits)}%` : 'Not recorded';
+  const formatDate = (value) => value ? new Date(typeof value === 'number' ? value * 1000 : value).toLocaleString() : 'Not recorded';
 
   return (
     <div className="animate-fade-in">
       <div className="view-header">
         <div className="view-title-group">
           <h1>3D CNN Model Training & Online Dataset</h1>
-          <p>Volumetric Deep Learning Pipeline: NoduleMNIST3D (LIDC-IDRI Lung Cancer) ingestion, 3D CNN training, checkpointing, and evaluation.</p>
+          <p>Configured volumetric dataset, 3D CNN training, saved checkpoints, and recorded evaluation metrics.</p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button className="btn btn-secondary" onClick={loadStatus}>
+          <button className="btn btn-secondary" onClick={loadStatus} disabled={loading}>
             <RefreshCw size={14} />
-            <span>Refresh</span>
+            <span>{loading ? 'Loading…' : 'Refresh'}</span>
           </button>
         </div>
       </div>
 
       {/* Top Telemetry Row */}
+      {statusError && <p role="alert" style={{ color: '#f59e0b', marginBottom: '1rem' }}>{statusError}</p>}
+      {trainingStatus?.status === 'ERROR' && <p role="alert" style={{ color: '#f59e0b', marginBottom: '1rem' }}>{trainingStatus.message}</p>}
+      {!trainingStatus && !statusError && <p role="status" style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Loading live training status…</p>}
+
       <div className="grid-3col" style={{ marginBottom: '1.75rem' }}>
         {/* Dataset Card */}
         <div className="glass-panel" style={{ padding: '1.5rem' }}>
@@ -79,28 +95,35 @@ export default function TrainingView() {
           </div>
 
           <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.2rem' }}>
-            NoduleMNIST3D (Lung Cancer)
+            {datasetLabel}
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '0.85rem' }}>
-            NIH/NCI LIDC-IDRI thoracic CT volumes (Benign vs. Malignant)
+            {trainingStatus?.dataset_source ? `Source: ${trainingStatus.dataset_source}` : 'Dataset source not configured'}
+            {trainingStatus?.dataset_classes?.length ? ` · Classes: ${trainingStatus.dataset_classes.join(', ')}` : ''}
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.82rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Status:</span>
-              <span style={{ color: 'var(--primary-hover)', fontWeight: 600 }}>29.3 MB Verified (Zenodo)</span>
+              <span style={{ color: 'var(--primary-hover)', fontWeight: 600 }}>
+                {trainingStatus?.dataset_available ? `${trainingStatus.dataset_size_mb} MB · Available` : 'Dataset file not found'}
+              </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Training Set:</span>
-              <span className="font-mono" style={{ color: 'var(--text-main)' }}>1,158 volumes (28³)</span>
+              <span className="font-mono" style={{ color: 'var(--text-main)' }}>{splits?.train ?? '—'} volumes</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Validation Set:</span>
-              <span className="font-mono" style={{ color: 'var(--text-main)' }}>165 volumes (28³)</span>
+              <span className="font-mono" style={{ color: 'var(--text-main)' }}>{splits?.val ?? '—'} volumes</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Test Set:</span>
-              <span className="font-mono" style={{ color: 'var(--text-main)' }}>310 volumes (28³)</span>
+              <span className="font-mono" style={{ color: 'var(--text-main)' }}>{splits?.test ?? '—'} volumes</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Volume shape:</span>
+              <span className="font-mono" style={{ color: 'var(--text-main)' }}>{trainingStatus?.volume_shape?.join(' × ') || '—'}</span>
             </div>
           </div>
         </div>
@@ -113,28 +136,28 @@ export default function TrainingView() {
           </div>
 
           <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.2rem' }}>
-            1,429,739 Parameters
+            {architecture.input_shape ? `${architecture.input_shape.join(' × ')} input` : 'Architecture not configured'}
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '0.85rem' }}>
-            TensorFlow 2.21 · 3D Spatial Feature Extraction
+            {architecture.optimizer ? `${architecture.optimizer} · ${architecture.loss || 'Loss not configured'}` : 'Model settings unavailable'}
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.82rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Conv3D Filters:</span>
-              <span className="font-mono" style={{ color: '#0284c7' }}>[32, 64, 128, 256]</span>
+              <span className="font-mono" style={{ color: '#0284c7' }}>{architecture.filters?.join(', ') || '—'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Regularization:</span>
-              <span style={{ color: 'var(--text-main)' }}>3D BatchNorm + L2</span>
+              <span style={{ color: 'var(--text-main)' }}>L2 = {architecture.l2_reg ?? '—'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Pooling:</span>
-              <span style={{ color: 'var(--text-main)' }}>3x MaxPool3D + GAP</span>
+              <span style={{ color: 'var(--text-main)' }}>Kernel: {architecture.kernel_size?.join(' × ') || '—'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Binary Head:</span>
-              <span className="font-mono" style={{ color: 'var(--text-main)' }}>512 → 256 → 2 Softmax</span>
+              <span className="font-mono" style={{ color: 'var(--text-main)' }}>{architecture.dense_units?.join(' → ') || '—'}</span>
             </div>
           </div>
         </div>
@@ -147,28 +170,28 @@ export default function TrainingView() {
           </div>
 
           <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--primary-hover)', marginBottom: '0.2rem' }}>
-            best_model.keras
+            {checkpoint?.checkpoint_exists ? checkpoint.checkpoint_path.split(/[\\/]/).pop() : 'No checkpoint found'}
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '0.85rem' }}>
-            16.45 MB · Checkpoint Checksum Verified
+            {checkpoint?.checkpoint_exists ? `${checkpoint.size_mb} MB · Updated ${formatDate(checkpoint.last_modified)}` : 'Train a model to create a checkpoint'}
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.82rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Training Accuracy:</span>
-              <span className="font-mono" style={{ color: 'var(--primary-hover)', fontWeight: 700 }}>80.31%</span>
+              <span className="font-mono" style={{ color: 'var(--primary-hover)', fontWeight: 700 }}>{formatMetric(accuracyArr.at(-1))}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Test Precision:</span>
-              <span className="font-mono" style={{ color: 'var(--text-main)' }}>83.82%</span>
+              <span className="font-mono" style={{ color: 'var(--text-main)' }}>{formatMetric(evaluation?.precision)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Test AUC-ROC:</span>
-              <span className="font-mono" style={{ color: '#0284c7' }}>0.7534</span>
+              <span className="font-mono" style={{ color: '#0284c7' }}>{Number.isFinite(Number(evaluation?.auc_roc)) ? Number(evaluation.auc_roc).toFixed(4) : 'Not evaluated'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Model Status:</span>
-              <span className="badge badge-low font-mono">DEPLOYED</span>
+              <span className="badge badge-low font-mono">{checkpoint?.checkpoint_exists ? 'AVAILABLE' : 'MISSING'}</span>
             </div>
           </div>
         </div>
@@ -182,7 +205,7 @@ export default function TrainingView() {
               Execute 3D CNN Training Cycle
             </h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-              Runs the pipeline: loading NoduleMNIST3D volumes → 3D data augmentation → fitting 3D CNN → checkpoint validation.
+            Runs the configured dataset through preprocessing, 3D CNN fitting, and checkpointing. Epoch metrics are saved after the run.
             </p>
           </div>
 
@@ -195,9 +218,9 @@ export default function TrainingView() {
                 className="form-select"
                 style={{ padding: '0.35rem 0.65rem', fontSize: '0.82rem', width: 'auto' }}
               >
-                <option value={3}>3 Epochs (~1 min)</option>
-                <option value={5}>5 Epochs (~2 mins)</option>
-                <option value={10}>10 Epochs (~4 mins)</option>
+                <option value={3}>3 Epochs</option>
+                <option value={5}>5 Epochs</option>
+                <option value={10}>10 Epochs</option>
               </select>
             </div>
 
@@ -219,9 +242,6 @@ export default function TrainingView() {
               <span>{trainingStatus.message}</span>
               <span className="badge badge-cyan font-mono">STATUS: {trainingStatus.status}</span>
             </div>
-            <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: '100%', height: '100%', background: 'var(--primary)' }} />
-            </div>
           </div>
         )}
       </div>
@@ -238,10 +258,10 @@ export default function TrainingView() {
           <div style={{ background: 'var(--bg-base)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.85rem', display: 'flex', justifyContent: 'space-between' }}>
               <span>Accuracy per Epoch</span>
-              <span className="font-mono" style={{ color: 'var(--primary-hover)', fontWeight: 700 }}>Peak: {(maxAcc * 100).toFixed(1)}%</span>
+              <span className="font-mono" style={{ color: 'var(--primary-hover)', fontWeight: 700 }}>{accuracyArr.length ? `Peak: ${(maxAcc * 100).toFixed(1)}%` : 'No recorded history'}</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.85rem', height: '130px', paddingTop: '0.85rem' }}>
+            {accuracyArr.length ? <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.85rem', height: '130px', paddingTop: '0.85rem' }}>
               {accuracyArr.map((acc, idx) => {
                 const heightPct = Math.round(acc * 100 * 1.1);
                 return (
@@ -262,17 +282,17 @@ export default function TrainingView() {
                   </div>
                 );
               })}
-            </div>
+            </div> : <p style={{ color: 'var(--text-muted)' }}>No training accuracy has been recorded yet.</p>}
           </div>
 
           {/* Loss Reduction */}
           <div style={{ background: 'var(--bg-base)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.85rem', display: 'flex', justifyContent: 'space-between' }}>
               <span>Loss per Epoch (Convergence)</span>
-              <span className="font-mono" style={{ color: '#0284c7' }}>{firstLoss.toFixed(2)} → {lastLoss.toFixed(2)}</span>
+              <span className="font-mono" style={{ color: '#0284c7' }}>{firstLoss == null ? 'Not recorded' : `${firstLoss.toFixed(3)} → ${lastLoss.toFixed(3)}`}</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.85rem', height: '130px', paddingTop: '0.85rem' }}>
+            {lossArr.length ? <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.85rem', height: '130px', paddingTop: '0.85rem' }}>
               {lossArr.map((l, idx) => {
                 const heightPct = Math.round((l / 2.8) * 100);
                 return (
@@ -293,9 +313,45 @@ export default function TrainingView() {
                   </div>
                 );
               })}
-            </div>
+            </div> : <p style={{ color: 'var(--text-muted)' }}>No training loss has been recorded yet.</p>}
           </div>
         </div>
+      </div>
+
+      <div className="glass-panel" style={{ padding: '1.75rem', marginTop: '1.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', marginBottom: '1.25rem' }}>
+          <Clock3 size={18} color="#06b6d4" />
+          <h3 style={{ fontSize: '1.05rem', color: 'var(--text-main)' }}>Saved Training Runs</h3>
+        </div>
+        {runHistory.length ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead><tr>
+                <th style={{ padding: '0.65rem' }}>Recorded</th>
+                <th style={{ padding: '0.65rem' }}>Dataset</th>
+                <th style={{ padding: '0.65rem' }}>Status</th>
+                <th style={{ padding: '0.65rem' }}>Epochs</th>
+                <th style={{ padding: '0.65rem' }}>Final train accuracy</th>
+                <th style={{ padding: '0.65rem' }}>Final validation accuracy</th>
+              </tr></thead>
+              <tbody>{runHistory.map((run) => (
+                <tr key={run.run_id}>
+                  <td style={{ padding: '0.65rem' }}>{formatDate(run.recorded_at || run.finished_at || run.started_at)}</td>
+                  <td style={{ padding: '0.65rem' }}>{run.dataset_name || '—'}</td>
+                  <td style={{ padding: '0.65rem' }}>{run.status || '—'}</td>
+                  <td style={{ padding: '0.65rem' }}>{run.completed_epochs ?? '—'} / {run.requested_epochs ?? '—'}</td>
+                  <td style={{ padding: '0.65rem' }}>{formatMetric(run.metrics?.accuracy?.at(-1))}</td>
+                  <td style={{ padding: '0.65rem' }}>{formatMetric(run.metrics?.val_accuracy?.at(-1))}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-muted)' }}>No training runs have been recorded. Completed or failed runs will be saved here.</p>
+        )}
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.8rem' }}>
+          Run history is persisted in results/training_runs.json; the latest epoch-by-epoch metrics are in results/training_history.json.
+        </p>
       </div>
     </div>
   );
