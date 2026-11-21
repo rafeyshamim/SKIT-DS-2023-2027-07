@@ -1,9 +1,11 @@
+"""End-to-End System Integration Test for the Medical AI Diagnostic Pipeline."""
+
 import io
 
 
 def test_full_medical_ai_lifecycle(client):
-    """
-    End-to-End System Integration Test:
+    """End-to-End System Integration Test:
+
     1. Register Patient in PostgreSQL
     2. Upload Multi-part CT Scan & Stream to Disk
     3. Execute 3D Volumetric Reconstruction & HU Windowing

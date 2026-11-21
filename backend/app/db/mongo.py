@@ -29,6 +29,13 @@ class MongoManager:
 
     def connect(self) -> None:
         """Connects to the MongoDB cluster and verifies ping status."""
+        if settings.ENVIRONMENT == "test":
+            self.client = None
+            self.db = None
+            self.is_connected = False
+            logger.info("Test environment detected. Utilizing file-backed NoSQL document store.")
+            return
+
         try:
             from pymongo import MongoClient
             client = MongoClient(

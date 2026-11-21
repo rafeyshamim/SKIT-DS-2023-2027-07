@@ -37,7 +37,6 @@ class CTScan(Base):
     __tablename__ = "ct_scans"
     __table_args__ = (
         Index("ix_ct_scans_patient_created", "patient_id", "created_at"),
-        Index("ix_ct_scans_status", "status"),
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
