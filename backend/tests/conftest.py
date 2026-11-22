@@ -42,14 +42,26 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
+    engine.dispose()
+    for db_path in ["./test_medvision.db", "./backend/test_medvision.db"]:
+        if os.path.exists(db_path):
+            try:
+                os.remove(db_path)
+            except Exception:
+                pass
     Base.metadata.create_all(bind=engine)
     yield
-    Base.metadata.drop_all(bind=engine)
-    if os.path.exists("./test_medvision.db"):
-        try:
-            os.remove("./test_medvision.db")
-        except Exception:
-            pass
+    try:
+        Base.metadata.drop_all(bind=engine)
+    except Exception:
+        pass
+    engine.dispose()
+    for db_path in ["./test_medvision.db", "./backend/test_medvision.db"]:
+        if os.path.exists(db_path):
+            try:
+                os.remove(db_path)
+            except Exception:
+                pass
 
 
 @pytest.fixture

@@ -1,23 +1,28 @@
+"""Pydantic NoSQL document models for rich 3D volumetric inference payloads."""
+
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BoundingBox3D(BaseModel):
-    z_min: int
-    z_max: int
-    y_min: int
-    y_max: int
-    x_min: int
-    x_max: int
+    """3D bounding box bounds in voxel coordinate space."""
+    z_min: int = Field(..., description="Minimum axial slice index")
+    z_max: int = Field(..., description="Maximum axial slice index")
+    y_min: int = Field(..., description="Minimum coronal height index")
+    y_max: int = Field(..., description="Maximum coronal height index")
+    x_min: int = Field(..., description="Minimum sagittal width index")
+    x_max: int = Field(..., description="Maximum sagittal width index")
 
 
 class Centroid(BaseModel):
-    z: float
-    y: float
-    x: float
+    """3D coordinate centroid in voxel or physical millimeter space."""
+    z: float = Field(..., description="Z-axis coordinate (depth / slice)")
+    y: float = Field(..., description="Y-axis coordinate (height / coronal)")
+    x: float = Field(..., description="X-axis coordinate (width / sagittal)")
 
 
 class LesionDetection(BaseModel):
+    """Detected focal pulmonary nodule or lesion with spatial 3D metrics."""
     lesion_id: str
     nodule_type: str = "Solid Pulmonary Nodule"
     centroid_voxel: Centroid
@@ -31,6 +36,7 @@ class LesionDetection(BaseModel):
 
 
 class InferencePayloadDocument(BaseModel):
+    """Full MongoDB document payload for an inference run."""
     id: Optional[str] = Field(None, alias="_id")
     inference_run_id: int
     scan_id: int
@@ -60,3 +66,5 @@ class InferencePayloadDocument(BaseModel):
     # 3D CAM / Attention peaks
     saliency_peak_voxels: List[List[int]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(populate_by_name=True)

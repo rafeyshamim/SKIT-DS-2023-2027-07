@@ -1,8 +1,19 @@
+"""FastAPI Endpoints for 3D CNN Inference and Prediction Results Database Logic.
+
+Manages the prediction lifecycle:
+1. Preprocessing check & volume validation
+2. Relational tracking via InferenceRun in PostgreSQL (QUEUED -> RUNNING -> COMPLETED/FAILED)
+3. 3D CNN forward inference, classification, and nodule localization
+4. NoSQL document persistence of 3D spatial detections, centroids, and slice heatmaps in MongoDB
+5. Dual-database cross-referencing and interactive PACS slice heatmap overlays
+"""
+
 import os
 import numpy as np
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.db.session import get_db
 from app.db.mongo import get_mongo
 from app.models.sql.scan import CTScan, ScanStatusEnum
@@ -10,7 +21,8 @@ from app.models.sql.inference import InferenceRun, InferenceStatusEnum, RiskLeve
 from app.schemas.inference import (
     InferenceTriggerRequest,
     InferenceResultResponse,
-    HeatmapSliceResponse
+    InferenceRunSummaryResponse,
+    HeatmapSliceResponse,
 )
 from app.services.model_service import model_service
 from app.services.dicom_processor import dicom_processor
@@ -28,19 +40,16 @@ def predict_scan(
     request: InferenceTriggerRequest = InferenceTriggerRequest(),
     db: Session = Depends(get_db)
 ):
-    """
-    Executes 3D CNN volumetric inference:
-    1. Validates scan existence and verifies 3D volume preprocessing.
-    2. Records an InferenceRun in PostgreSQL (relational audit trail).
-    3. Runs 3D CNN forward pass, computing class probabilities and 3D nodule localization.
-    4. Persists rich volumetric metrics, bounding boxes, and slice maps in MongoDB.
-    5. Updates PostgreSQL with confidence score, primary prediction, and risk level.
+    """Executes 3D CNN volumetric inference and persists deliverables across databases.
+
+    - PostgreSQL: Records InferenceRun row (status, prediction, confidence score, risk category).
+    - MongoDB: Inserts InferencePayloadDocument (3D bounding boxes, centroids, slice abnormality scores).
     """
     scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
     if not scan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"CT Scan ID {scan_id} not found.")
 
-    # Ensure volume is preprocessed
+    # 1. Verify 3D volumetric preprocessing
     if not scan.processed_volume_path or not os.path.exists(scan.processed_volume_path):
         logger.info(f"Scan {scan_id} volume not yet preprocessed. Running preprocessing synchronously.")
         extracted = storage_service.extract_zip_if_needed(scan.file_path, scan.scan_uid)
@@ -50,7 +59,7 @@ def predict_scan(
         scan.status = ScanStatusEnum.PROCESSED.value
         db.commit()
 
-    # Create InferenceRun row in PostgreSQL
+    # 2. Initialize and commit pending InferenceRun in PostgreSQL
     run = InferenceRun(
         scan_id=scan.id,
         model_name=settings.MODEL_NAME,
@@ -63,7 +72,7 @@ def predict_scan(
     db.refresh(run)
 
     try:
-        # Run 3D CNN Model Inference
+        # 3. Execute 3D CNN forward pass & nodule localization
         primary_pred, confidence, risk_level, duration_ms, payload_doc = model_service.run_inference_on_volume(
             volume_path=scan.processed_volume_path,
             scan_id=scan.id,
@@ -71,18 +80,18 @@ def predict_scan(
             confidence_threshold=request.confidence_threshold
         )
 
-        # Store rich spatial/slice payload in MongoDB
+        # 4. Insert rich spatial payload into MongoDB
         mongo = get_mongo()
         mongo_id = mongo.insert_document("inference_payloads", payload_doc.model_dump())
 
-        # Update SQL record with inference results
-        run.status = InferenceStatusEnum.COMPLETED.value
-        run.primary_prediction = primary_pred
-        run.confidence_score = confidence
-        run.risk_level = risk_level
-        run.processing_time_ms = duration_ms
-        run.mongo_payload_id = mongo_id
-        run.completed_at = get_utc_now()
+        # 5. Commit prediction results to PostgreSQL
+        run.mark_completed(
+            prediction=primary_pred,
+            confidence=confidence,
+            risk_level=risk_level,
+            mongo_payload_id=mongo_id,
+            duration_ms=duration_ms,
+        )
         db.commit()
         db.refresh(run)
 
@@ -92,10 +101,10 @@ def predict_scan(
             "patient_id": scan.patient_id,
             "model_name": run.model_name,
             "model_version": run.model_version,
-            "status": run.status,
+            "status": run.status.value if isinstance(run.status, InferenceStatusEnum) else str(run.status),
             "primary_prediction": run.primary_prediction,
             "confidence_score": run.confidence_score,
-            "risk_level": run.risk_level,
+            "risk_level": run.risk_level.value if isinstance(run.risk_level, RiskLevelEnum) else str(run.risk_level),
             "processing_time_ms": run.processing_time_ms,
             "class_probabilities": payload_doc.class_probabilities,
             "lesions_detected_count": len(payload_doc.lesion_detections),
@@ -113,9 +122,7 @@ def predict_scan(
     except Exception as e:
         logger.error(f"Inference execution failed for scan {scan_id}: {e}", exc_info=True)
         try:
-            run.status = InferenceStatusEnum.FAILED.value
-            run.error_message = str(e)
-            run.completed_at = get_utc_now()
+            run.mark_failed(str(e))
             db.commit()
         except Exception:
             db.rollback()
@@ -127,11 +134,14 @@ def predict_scan(
 
 @router.get("/runs/{inference_run_id}", response_model=InferenceResultResponse, summary="Get Inference Run Result")
 def get_inference_run(inference_run_id: int, db: Session = Depends(get_db)):
+    """Retrieves structured prediction result, confidence score, and MongoDB payload by Run ID."""
     run = db.query(InferenceRun).filter(InferenceRun.id == inference_run_id).first()
     if not run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Inference run ID {inference_run_id} not found.")
 
     scan = run.scan
+    patient_id = scan.patient_id if scan else 0
+
     mongo = get_mongo()
     mongo_doc = mongo.get_document("inference_payloads", run.mongo_payload_id) if run.mongo_payload_id else {}
     if not mongo_doc:
@@ -142,16 +152,19 @@ def get_inference_run(inference_run_id: int, db: Session = Depends(get_db)):
     probs = mongo_doc.get("class_probabilities", {})
     slice_scores = mongo_doc.get("slice_abnormality_scores", [])
 
+    status_val = run.status.value if isinstance(run.status, InferenceStatusEnum) else str(run.status)
+    risk_val = run.risk_level.value if isinstance(run.risk_level, RiskLevelEnum) else str(run.risk_level) if run.risk_level else None
+
     return {
         "id": run.id,
         "scan_id": run.scan_id,
-        "patient_id": scan.patient_id,
+        "patient_id": patient_id,
         "model_name": run.model_name,
         "model_version": run.model_version,
-        "status": run.status,
+        "status": status_val,
         "primary_prediction": run.primary_prediction,
         "confidence_score": run.confidence_score,
-        "risk_level": run.risk_level,
+        "risk_level": risk_val,
         "processing_time_ms": run.processing_time_ms,
         "class_probabilities": probs,
         "lesions_detected_count": len(lesions),
@@ -169,6 +182,7 @@ def get_inference_run(inference_run_id: int, db: Session = Depends(get_db)):
 
 @router.get("/scans/{scan_id}/latest", response_model=InferenceResultResponse, summary="Get Latest Inference for Scan")
 def get_latest_inference_for_scan(scan_id: int, db: Session = Depends(get_db)):
+    """Fetches the most recently completed 3D inference run for a given CT Scan."""
     run = db.query(InferenceRun).filter(
         InferenceRun.scan_id == scan_id,
         InferenceRun.status == InferenceStatusEnum.COMPLETED.value
@@ -188,17 +202,14 @@ def list_inference_runs_for_scan(scan_id: int, db: Session = Depends(get_db)):
     for r in runs:
         try:
             results.append(get_inference_run(r.id, db))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not load inference run {r.id}: {e}")
     return results
 
 
 @router.get("/scans/{scan_id}/slice-heatmap/{slice_idx}", response_model=HeatmapSliceResponse, summary="Get Axial Slice Heatmap & Coordinates")
 def get_slice_heatmap(scan_id: int, slice_idx: int, db: Session = Depends(get_db)):
-    """
-    Returns the normalized 2D heatmap matrix and lesion indicators for a specific axial slice.
-    Used by PACS/DICOM viewers to render visual AI attention overlays on CT slices.
-    """
+    """Returns normalized 2D heatmap matrix and lesion indicators for a specific axial slice."""
     scan = db.query(CTScan).filter(CTScan.id == scan_id).first()
     if not scan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found.")
@@ -214,7 +225,7 @@ def get_slice_heatmap(scan_id: int, slice_idx: int, db: Session = Depends(get_db
     mongo = get_mongo()
     doc = mongo.get_document("inference_payloads", latest_run.mongo_payload_id) or {}
     slice_scores = doc.get("slice_abnormality_scores", [])
-    total_slices = len(slice_scores) if slice_scores else 32
+    total_slices = len(slice_scores) if slice_scores else (scan.slice_count or 32)
 
     if slice_idx < 0 or slice_idx >= total_slices:
         raise HTTPException(
@@ -224,15 +235,13 @@ def get_slice_heatmap(scan_id: int, slice_idx: int, db: Session = Depends(get_db
 
     abnormality_score = slice_scores[slice_idx] if slice_idx < len(slice_scores) else 0.0
 
-    # Filter lesions intersecting this axial slice
     lesions_on_slice = []
     for lesion in doc.get("lesion_detections", []):
         bbox = lesion.get("bounding_box_3d", {})
         if bbox.get("z_min", 0) <= slice_idx <= bbox.get("z_max", 31):
             lesions_on_slice.append(lesion)
 
-    # 16x16 normalized grid representation for fast frontend rendering
-    grid = [[round(abnormality_score * np.exp(-((r - 8)**2 + (c - 8)**2) / 18.0), 3) for c in range(16)] for r in range(16)]
+    grid = [[round(abnormality_score * float(np.exp(-((r - 8)**2 + (c - 8)**2) / 18.0)), 3) for c in range(16)] for r in range(16)]
 
     return {
         "scan_id": scan_id,

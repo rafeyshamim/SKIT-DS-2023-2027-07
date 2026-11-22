@@ -1,17 +1,32 @@
+"""Integration and unit tests for 3D CNN model inference and database logic."""
+
 import io
 
 
 def test_3d_cnn_inference_pipeline(client):
-    # 1. Create patient
+    """Verifies complete inference lifecycle:
+
+    1. Patient creation in relational database
+    2. DICOM / CT Scan upload
+    3. Triggering 3D CNN forward pass & nodule localization
+    4. Verification of database persistence:
+       - InferenceRun record in PostgreSQL with primary prediction & confidence score
+       - MongoDB document with 3D lesion detections and axial abnormality scores
+    5. Querying latest and historical inference runs
+    6. Retrieval of normalized axial slice Grad-CAM heatmaps
+    7. Validation of invalid slice bounds
+    """
+    # 1. Create patient record
     p_res = client.post("/api/v1/patients", json={
         "medical_record_number": "MRN-INF-TEST-3003",
         "full_name": "Gordon Freeman",
         "gender": "MALE",
         "medical_history_notes": "Heavy smoker, 30 pack-years. Hemoptysis."
     })
+    assert p_res.status_code == 201
     patient_id = p_res.json()["id"]
 
-    # 2. Upload scan
+    # 2. Upload and preprocess CT scan
     fake_scan_content = b"SIMULATED_DICOM_DATA"
     upload_res = client.post(
         "/api/v1/scans/upload",
@@ -23,6 +38,7 @@ def test_3d_cnn_inference_pipeline(client):
         },
         files={"file": ("gordon_chest.dcm", io.BytesIO(fake_scan_content), "application/dicom")}
     )
+    assert upload_res.status_code == 201
     scan_id = upload_res.json()["scan_id"]
 
     # 3. Trigger 3D CNN Inference
@@ -42,7 +58,7 @@ def test_3d_cnn_inference_pipeline(client):
 
     run_id = inf_data["id"]
 
-    # 4. Fetch specific inference run
+    # 4. Fetch specific inference run by ID
     get_run_res = client.get(f"/api/v1/inference/runs/{run_id}")
     assert get_run_res.status_code == 200
     assert get_run_res.json()["primary_prediction"] == inf_data["primary_prediction"]
