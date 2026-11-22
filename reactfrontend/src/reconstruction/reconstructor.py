@@ -18,7 +18,7 @@ from typing import Dict, Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.utils.logger import setup_logger
+from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 

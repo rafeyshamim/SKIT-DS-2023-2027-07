@@ -311,6 +311,8 @@
 }
 
 .slice-canvas {
+  width: min(100%, 440px);
+  height: 440px;
   max-width: 100%;
   max-height: 440px;
   object-fit: contain;
@@ -564,25 +566,6 @@
   border-top: 1px dashed #cbd5e1;
   display: flex;
   justify-content: space-between;
-}
-
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  .report-paper, .report-paper * {
-    visibility: visible;
-  }
-  .report-paper {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 2cm;
-    box-shadow: none;
-    border: none;
-  }
 }
 
 /* Responsive queries */

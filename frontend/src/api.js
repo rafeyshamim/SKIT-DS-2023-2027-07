@@ -64,7 +64,10 @@ export async function createDemoScan(patientName = 'John Anderson', patientMrn =
     body: formData,
   });
   if (!res.ok) throw new Error('Failed to generate demo scan');
-  return await res.json();
+  const scan = await res.json();
+  // The sample endpoint calls the database ID `scan_id`; the viewer and
+  // scan list use `id`. Normalize the response before passing it to the UI.
+  return { ...scan, id: scan.id ?? scan.scan_id };
 }
 
 export async function fetchScanSlice(scanId, sliceIdx = 16, plane = 'axial') {

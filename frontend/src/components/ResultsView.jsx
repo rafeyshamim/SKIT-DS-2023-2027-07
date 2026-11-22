@@ -14,9 +14,15 @@ import {
 } from 'lucide-react';
 import { triggerInference, fetchLatestInference, generateClinicalReport } from '../api';
 
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[char]));
+
 export default function ResultsView({ currentScan, onNavigateToViewer }) {
   const [inferenceResult, setInferenceResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
+  const [printError, setPrintError] = useState('');
   const [report, setReport] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [radiologistName, setRadiologistName] = useState('Dr. Elena Rostova, MD (Senior Thoracic Radiologist)');
@@ -29,6 +35,7 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
 
   async function loadLatestOrRun() {
     setLoading(true);
+    setAnalysisError('');
     try {
       let data = await fetchLatestInference(currentScan.id);
       if (!data) {
@@ -41,6 +48,7 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
       const rep = await generateClinicalReport(currentScan.id, data.id, radiologistName);
       setReport(rep);
     } catch (err) {
+      setAnalysisError(err.message || 'Could not load analysis results.');
       console.warn('Inference / Report fetch error:', err);
     } finally {
       setLoading(false);
@@ -49,12 +57,14 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
 
   async function handleRerunInference() {
     setLoading(true);
+    setAnalysisError('');
     try {
       const data = await triggerInference(currentScan.id, 0.45);
       setInferenceResult(data);
       const rep = await generateClinicalReport(currentScan.id, data.id, radiologistName);
       setReport(rep);
     } catch (err) {
+      setAnalysisError(err.message || 'Could not run inference.');
       console.error('Rerun inference failed:', err);
     } finally {
       setLoading(false);
@@ -62,7 +72,83 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
   }
 
   const handlePrint = () => {
-    window.print();
+    if (!inferenceResult) {
+      setPrintError('Run inference before printing this report.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setPrintError('The browser blocked the report window. Allow pop-ups for this app, then try again.');
+      return;
+    }
+
+    setPrintError('');
+    const metrics = inferenceResult.volumetric_metrics || {};
+    const probabilities = Object.entries(inferenceResult.class_probabilities || {})
+      .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${(Number(value) * 100).toFixed(1)}%</td></tr>`)
+      .join('');
+    const lesions = (inferenceResult.lesions || []).map((lesion) => `
+      <tr>
+        <td>${escapeHtml(lesion.lesion_id)}</td>
+        <td>${escapeHtml(lesion.nodule_type)}</td>
+        <td>${escapeHtml(`Z ${lesion.centroid_mm?.z ?? '—'}, Y ${lesion.centroid_mm?.y ?? '—'}, X ${lesion.centroid_mm?.x ?? '—'} mm`)}</td>
+        <td>${escapeHtml(lesion.volume_mm3)} mm³</td>
+        <td>${(Number(lesion.malignancy_score || 0) * 100).toFixed(1)}%</td>
+      </tr>`).join('');
+    const paragraph = (value, fallback) => escapeHtml(value || fallback);
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+      <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>MedVision CT Analysis — ${escapeHtml(currentScan.scan_uid)}</title>
+      <style>
+        @page { size: A4; margin: 16mm; }
+        * { box-sizing: border-box; }
+        html, body { background: #fff !important; color: #172033 !important; color-scheme: light; }
+        body { margin: 0; min-height: 100vh; padding: 8px; font: 11pt/1.5 Arial, sans-serif; }
+        h1 { margin: 0; font-size: 20pt; }
+        h2 { margin: 20px 0 7px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; font-size: 12pt; }
+        p { margin: 5px 0; white-space: pre-wrap; }
+        .top { display:flex; justify-content:space-between; gap:20px; padding-bottom:14px; border-bottom:2px solid #0e7490; }
+        .muted { color:#64748b; }
+        .summary { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+        .metric { padding:9px; border:1px solid #cbd5e1; border-radius:6px; }
+        .metric strong { display:block; font-size:13pt; }
+        table { width:100%; border-collapse:collapse; margin:8px 0 14px; }
+        th,td { padding:7px; text-align:left; border:1px solid #cbd5e1; vertical-align:top; }
+        .disclaimer { margin-top:24px; padding-top:10px; border-top:1px solid #cbd5e1; color:#64748b; font-size:9pt; }
+        tr { break-inside:avoid; }
+        @media print {
+          html, body { background: #fff !important; color: #172033 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .muted, .disclaimer { color: #64748b !important; }
+        }
+      </style></head><body>
+        <header class="top"><div><h1>MedVision 3D</h1><div class="muted">AI-assisted volumetric CT analysis report</div></div>
+          <div><strong>Scan:</strong> ${escapeHtml(currentScan.scan_uid)}<br><strong>Date:</strong> ${new Date().toLocaleDateString()}</div></header>
+        <h2>Analysis Summary</h2>
+        <p><strong>Prediction:</strong> ${escapeHtml(inferenceResult.primary_prediction)}</p>
+        <p><strong>Risk category:</strong> ${escapeHtml(inferenceResult.risk_level)}</p>
+        <p><strong>Confidence:</strong> ${(Number(inferenceResult.confidence_score || 0) * 100).toFixed(1)}%</p>
+        <p><strong>Model:</strong> ${escapeHtml(inferenceResult.model_name)} ${escapeHtml(inferenceResult.model_version)} · Run #${escapeHtml(inferenceResult.id)}</p>
+        <div class="summary">
+          <div class="metric">Total lung volume<strong>${escapeHtml(metrics.total_lung_volume_cm3 ?? '—')} cm³</strong></div>
+          <div class="metric">Total lesion volume<strong>${escapeHtml(metrics.total_lesion_volume_mm3 ?? '—')} mm³</strong></div>
+          <div class="metric">Lung involvement<strong>${escapeHtml(metrics.lung_involvement_percentage ?? '—')}%</strong></div>
+          <div class="metric">Lesions detected<strong>${escapeHtml(inferenceResult.lesions_detected_count ?? 0)}</strong></div>
+        </div>
+        <h2>Class Probabilities</h2><table><tbody>${probabilities || '<tr><td>No probability data</td></tr>'}</tbody></table>
+        <h2>Detected Lesions</h2><table><thead><tr><th>ID</th><th>Morphology</th><th>Centroid</th><th>Volume</th><th>Score</th></tr></thead>
+          <tbody>${lesions || '<tr><td colspan="5">No lesions reported</td></tr>'}</tbody></table>
+        <h2>Clinical Findings</h2><p>${paragraph(report?.findings, 'No narrative findings are available.')}</p>
+        <h2>Impression</h2><p>${paragraph(report?.impression, inferenceResult.primary_prediction)}</p>
+        <h2>Recommendations</h2><p>${paragraph(report?.recommendations, 'No recommendations are available.')}</p>
+        <p class="disclaimer">Academic demonstration output only. This AI-generated report is not a clinically validated diagnosis and requires review by a qualified clinician.</p>
+      </body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 300);
+    printWindow.onafterprint = () => printWindow.close();
   };
 
   if (!currentScan) {
@@ -110,6 +196,10 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
         </div>
       </div>
 
+      {printError && <p role="alert" style={{ color: '#b45309', marginBottom: '1rem' }}>{printError}</p>}
+      {analysisError && inferenceResult && <p role="status" style={{ color: '#b45309', marginBottom: '1rem' }}>Inference finished, but the report could not refresh: {analysisError}</p>}
+      {loading && inferenceResult && <p role="status" style={{ color: 'var(--primary-hover)', marginBottom: '1rem' }}>Running a new inference for scan {currentScan.scan_uid}…</p>}
+
       {loading && !inferenceResult ? (
         <div className="glass-panel" style={{ padding: '4rem', textAlign: 'center' }}>
           <div style={{ width: '48px', height: '48px', border: '3px solid rgba(0, 210, 180, 0.2)', borderTopColor: 'var(--primary)', borderRadius: '50%', margin: '0 auto 1.5rem', animation: 'spin 1s linear infinite' }} />
@@ -117,6 +207,16 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
           <p style={{ color: '#94a3b8' }}>
             Forward pass on (1, 1, 32, 64, 64) tensor · 3D spatial convolutions · Grad-CAM localization
           </p>
+        </div>
+      ) : analysisError && !inferenceResult ? (
+        <div className="glass-panel" role="alert" style={{ padding: '2.5rem', textAlign: 'center', marginTop: '1.5rem' }}>
+          <AlertTriangle size={36} color="#f59e0b" style={{ marginBottom: '0.75rem' }} />
+          <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Analysis could not be loaded</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.25rem' }}>{analysisError}</p>
+          <button className="btn btn-primary" onClick={handleRerunInference} disabled={loading}>
+            <Cpu size={15} />
+            <span>Try Inference Again</span>
+          </button>
         </div>
       ) : inferenceResult ? (
         <>
@@ -126,6 +226,9 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.65rem' }}>
                 <span className={`badge ${isCritical ? 'badge-critical' : 'badge-moderate'}`}>
                   RISK LEVEL: {inferenceResult.risk_level}
+                </span>
+                <span className="telemetry-chip" style={{ padding: '0.15rem 0.6rem' }}>
+                  Inference run #{inferenceResult.id}
                 </span>
                 <span className="telemetry-chip" style={{ padding: '0.15rem 0.6rem' }}>
                   <Clock size={12} />
@@ -370,7 +473,13 @@ export default function ResultsView({ currentScan, onNavigateToViewer }) {
             </div>
           </div>
         </>
-      ) : null}
+      ) : (
+        <div className="glass-panel" style={{ padding: '2.5rem', textAlign: 'center', marginTop: '1.5rem' }}>
+          <Info size={32} color="var(--primary)" style={{ marginBottom: '0.75rem' }} />
+          <h3>No analysis result is available yet</h3>
+          <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>Run inference to generate findings for this scan.</p>
+        </div>
+      )}
     </div>
   );
 }
